@@ -24,11 +24,38 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-	title: '3D 画廊摄影模板',
-	description: '现代化3D画廊摄影展示模板',
-    generator: 'v0.app',
+	title: 'YYC3 Gallery Photography Template',
+	description: '温润艺术风 · 3D无限滚动画廊系统 | Warm Art Style · 3D Infinite Scroll Gallery System',
+	keywords: ['YYC3', 'Gallery', 'Photography', '3D', 'Template', 'Infinite Scroll', 'Art'],
+	authors: [{ name: 'YYC³' }],
+	creator: 'YYC³',
+	publisher: 'YYC³',
+    generator: 'Next.js 15',
+	icons: {
+		icon: [
+			{ url: '/yyc3-icons/Web App/favicon-16.png', sizes: '16x16', type: 'image/png' },
+			{ url: '/yyc3-icons/Web App/favicon-32.png', sizes: '32x32', type: 'image/png' },
+		],
+		apple: [
+			{ url: '/yyc3-icons/Web App/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+		],
+	},
+	manifest: '/yyc3-icons/manifest.json',
+    openGraph: {
+        title: 'YYC3 Gallery Photography Template',
+        description: '温润艺术风 · 3D无限滚动画廊系统',
+        url: 'https://gallery.yyc3.top',
+        siteName: 'YYC3 Gallery',
+        locale: 'zh_CN',
+        type: 'website',
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'YYC3 Gallery Photography Template',
+        description: '温润艺术风 · 3D无限滚动画廊系统',
+    },
     alternates: {
-        canonical: 'https://example.com',
+        canonical: 'https://gallery.yyc3.top',
     }
 };
 
