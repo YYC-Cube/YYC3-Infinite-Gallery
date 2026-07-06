@@ -23,13 +23,13 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-2.0.0-blue?style=for-the-badge" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />
-  <img src="https://img.shields.io/github/actions/workflow/status/yyc3/yyc3-infinite-gallery/deploy.yml?branch=main&style=for-the-badge" />
+  <img src="https://img.shields.io/github/actions/workflow/status/YYC-Cube/YYC3-Infinite-Gallery/deploy.yml?branch=main&style=for-the-badge" />
   <img src="https://img.shields.io/badge/PWA-Ready-purple?style=for-the-badge&logo=pwa" />
   <img src="https://img.shields.io/badge/lighthouse-100-brightgreen?style=for-the-badge" />
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/codefactor/grade/github/yyc3/yyc3-infinite-gallery?style=for-the-badge" />
+  <img src="https://img.shields.io/codefactor/grade/github/YYC-Cube/YYC3-Infinite-Gallery?style=for-the-badge" />
   <img src="https://img.shields.io/badge/TypeScript-5.7.0-3178C6?style=for-the-badge&logo=typescript" />
   <img src="https://img.shields.io/badge/React-19.2.7-61DAFB?style=for-the-badge&logo=react" />
   <img src="https://img.shields.io/badge/Next.js-16.2.10-black?style=for-the-badge&logo=next.js" />
@@ -91,7 +91,7 @@
 
 ```bash
 # Clone the project
-git clone https://github.com/yyc3/yyc3-infinite-gallery.git
+git clone https://github.com/YYC-Cube/YYC3-Infinite-Gallery.git
 cd yyc3-infinite-gallery
 
 # Install dependencies (pnpm recommended)
@@ -316,7 +316,7 @@ git push origin feat/your-feature
 
 ### Report Bugs
 
-Please use [GitHub Issues](https://github.com/yyc3/yyc3-infinite-gallery/issues):
+Please use [GitHub Issues](https://github.com/YYC-Cube/YYC3-Infinite-Gallery/issues):
 
 1. **Describe the problem** — Clear description of the issue
 2. **Reproduction steps** — Detailed steps to reproduce
@@ -359,11 +359,11 @@ We welcome new feature suggestions! Please use the "Feature Request" label in Is
 ## 📊 Project Statistics
 
 <p align="center">
-  <img src="https://img.shields.io/github/stars/yyc3/yyc3-infinite-gallery?style=social" />
-  <img src="https://img.shields.io/github/forks/yyc3/yyc3-infinite-gallery?style=social" />
-  <img src="https://img.shields.io/github/watchers/yyc3/yyc3-infinite-gallery?style=social" />
-  <img src="https://img.shields.io/github/contributors/yyc3/yyc3-infinite-gallery" />
-  <img src="https://img.shields.io/github/last-commit/yyc3/yyc3-infinite-gallery" />
+  <img src="https://img.shields.io/github/stars/YYC-Cube/YYC3-Infinite-Gallery?style=social" />
+  <img src="https://img.shields.io/github/forks/YYC-Cube/YYC3-Infinite-Gallery?style=social" />
+  <img src="https://img.shields.io/github/watchers/YYC-Cube/YYC3-Infinite-Gallery?style=social" />
+  <img src="https://img.shields.io/github/contributors/YYC-Cube/YYC3-Infinite-Gallery" />
+  <img src="https://img.shields.io/github/last-commit/YYC-Cube/YYC3-Infinite-Gallery" />
 </p>
 
 ---
@@ -378,6 +378,6 @@ We welcome new feature suggestions! Please use the "Feature Request" label in Is
 
 <p align="center">
   Built with ❤️ by <a href="https://yyc3.top">YYC³</a> ·
-  <a href="https://github.com/yyc3/yyc3-infinite-gallery">GitHub</a> ·
+  <a href="https://github.com/YYC-Cube/YYC3-Infinite-Gallery">GitHub</a> ·
   <a href="https://gallery.yyc3.top">Live Demo</a>
 </p>

@@ -24,23 +24,22 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-	title: 'YYC3 Gallery Photography Template',
-	description: '温润艺术风 · 3D无限滚动画廊系统 | Warm Art Style · 3D Infinite Scroll Gallery System',
-	keywords: ['YYC3', 'Gallery', 'Photography', '3D', 'Template', 'Infinite Scroll', 'Art'],
+	title: 'YYC3 Infinite Gallery',
+	description: '基于 Next.js 和 Three.js 构建的高性能 3D 无限滚动画廊展示系统 | High-performance 3D Infinite Scroll Gallery',
+	keywords: ['YYC3', 'Gallery', 'Photography', '3D', 'Infinite Scroll', 'Next.js', 'Three.js'],
 	authors: [{ name: 'YYC³' }],
 	creator: 'YYC³',
 	publisher: 'YYC³',
-    generator: 'Next.js 15',
+    generator: 'Next.js 16',
 	icons: {
 		icon: [
-			{ url: '/yyc3-icons/Web App/favicon-16.png', sizes: '16x16', type: 'image/png' },
-			{ url: '/yyc3-icons/Web App/favicon-32.png', sizes: '32x32', type: 'image/png' },
+			{ url: '/favicon.ico', type: 'image/x-icon' },
 		],
 		apple: [
-			{ url: '/yyc3-icons/Web App/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+			{ url: '/D-icons/icon-192.png', sizes: '192x192', type: 'image/png' },
 		],
 	},
-	manifest: '/yyc3-icons/manifest.json',
+	manifest: '/manifest.json',
     openGraph: {
         title: 'YYC3 Gallery Photography Template',
         description: '温润艺术风 · 3D无限滚动画廊系统',

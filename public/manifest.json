@@ -1,0 +1,33 @@
+{
+  "name": "YYC3 Infinite Gallery",
+  "short_name": "YYC3 Gallery",
+  "description": "基于 Next.js 和 Three.js 构建的高性能 3D 无限滚动画廊展示系统",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/D-icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/D-icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/D-1998.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "categories": ["photography", "gallery", "3d"],
+  "lang": "zh-CN"
+}
