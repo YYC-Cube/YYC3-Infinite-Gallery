@@ -15,7 +15,6 @@ import type { GalleryConfig } from '@/lib/config-store';
 import {
 	DEFAULT_CONFIG,
 	loadConfig,
-	saveConfig,
 	applyConfigToDOM,
 } from '@/lib/config-store';
 
