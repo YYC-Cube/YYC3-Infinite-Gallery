@@ -1,6 +1,30 @@
-# 🚀 部署指南
+---
+file: deployment.md
+title: 部署指南
+description: YYC³ Infinite Gallery 多环境部署方案与配置完整指南
+author: YYC³ Team <admin@0379.email>
+version: v1.0.0
+created: 2026-11-18
+updated: 2026-11-18
+status: stable
+tags: [deployment, guide, github-pages]
+category: documentation
+language: zh-CN
+audience: developers,devops
+complexity: intermediate
+---
 
-本文档提供 YYC3 Infinite Gallery 多种部署方案的完整指南。
+# 部署指南
+
+> **_YYC³_**（YanYuCloudCube™ · 注册商标）
+> _言启象限 | 语枢未来_
+> **_Words Initiate Quadrants, Language Serves as Core for Future_**
+> _万象归元于云枢 | 深栈智启新纪元_
+> **_All things converge in cloud pivot; Deep stacks ignite a new era of intelligence_**
+
+---
+
+本文档提供 YYC³ Infinite Gallery 多种部署方案的完整指南。
 
 ---
 
@@ -186,6 +210,19 @@ DNS 配置（在域名服务商处设置）：
 
 ---
 
-<div align="center">
-  <a href="./README.md">← 返回文档首页</a>
-</div>
+## 变更历史
+
+| 版本 | 日期 | 变更内容 | 作者 |
+| ---- | ---- | -------- | ---- |
+| v1.0.0 | 2026-11-18 | 按 YYC³ 团队标规统一 front matter、品牌写法与标头标尾 | YYC³ Team |
+
+---
+
+<p align="center">
+  <b>YYC³</b>（YanYuCloudCube™ · 注册商标）<br>
+  言启象限 | 语枢未来<br>
+  <i>Words Initiate Quadrants, Language Serves as Core for Future</i><br>
+  万象归元于云枢 | 深栈智启新纪元<br>
+  <i>All things converge in cloud pivot; Deep stacks ignite a new era of intelligence</i><br>
+  <sub>© 2026 YanYuCloudCube™（YYC³）· <a href="mailto:admin@0379.email">admin@0379.email</a></sub>
+</p>

@@ -6,7 +6,6 @@
  * @created 2026-01-15
  */
 
-const CACHE_NAME = 'yyc3-gallery-v2.0.0';
 const STATIC_CACHE = 'yyc3-static-v2.0.0';
 const DYNAMIC_CACHE = 'yyc3-dynamic-v2.0.0';
 
@@ -166,7 +165,7 @@ async function networkFirst(request) {
     }
     
     return networkResponse;
-  } catch (error) {
+  } catch {
     console.log('[SW] Network failed, serving from cache:', request.url);
     const cachedResponse = await caches.match(request);
     

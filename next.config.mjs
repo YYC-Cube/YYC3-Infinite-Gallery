@@ -9,9 +9,9 @@ const nextConfig = {
   },
   trailingSlash: true,
 
-  // 跳过 TypeScript 类型检查（构建时忽略类型错误）
+  // 严格类型门禁：构建时必须通过 TypeScript 检查
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 
   // Turbopack 配置

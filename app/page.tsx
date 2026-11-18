@@ -11,7 +11,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import InfiniteGallery from '@/components/InfiniteGallery';
 import ConfigPanel from '@/components/ConfigPanel';
+import FloatingMediaPlayer from '@/components/FloatingMediaPlayer';
 import type { GalleryConfig } from '@/lib/config-store';
+import { GALLERY_IMAGES } from '@/lib/media-store';
 import {
 	DEFAULT_CONFIG,
 	loadConfig,
@@ -34,16 +36,10 @@ export default function Home() {
 		setConfig(newConfig);
 	}, []);
 
-	const sampleImages = [
-		{ src: '/1.webp', alt: '摄影作品 1' },
-		{ src: '/2.webp', alt: '摄影作品 2' },
-		{ src: '/3.webp', alt: '摄影作品 3' },
-		{ src: '/4.webp', alt: '摄影作品 4' },
-		{ src: '/5.webp', alt: '摄影作品 5' },
-		{ src: '/6.webp', alt: '摄影作品 6' },
-		{ src: '/7.webp', alt: '摄影作品 7' },
-		{ src: '/8.webp', alt: '摄影作品 8' },
-	];
+	const sampleImages = GALLERY_IMAGES.map((src, index) => ({
+		src,
+		alt: `音乐影像作品 ${index + 1}`,
+	}));
 
 	if (!isClient) return null;
 
@@ -232,6 +228,9 @@ export default function Home() {
 				isOpen={isPanelOpen}
 				onToggle={() => setIsPanelOpen(false)}
 			/>
+
+			{/* 边界悬浮音乐 / 影像播放器 */}
+			<FloatingMediaPlayer />
 		</main>
 	);
 }

@@ -1,10 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import type { GalleryConfig } from '@/lib/config-store';
 import {
-	DEFAULT_CONFIG,
-	loadConfig,
 	saveConfig,
 	resetConfig,
 	applyConfigToDOM,

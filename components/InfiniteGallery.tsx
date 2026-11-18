@@ -9,7 +9,7 @@
 
 import type React from 'react';
 import { useRef, useMemo, useCallback, useState, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 
@@ -187,13 +187,13 @@ function ImagePlane({
 
 	useEffect(() => {
 		if (material && texture) {
-			material.uniforms.map.value = texture;
+			material.uniforms.map!.value = texture;
 		}
 	}, [material, texture]);
 
 	useEffect(() => {
 		if (material && material.uniforms) {
-			material.uniforms.isHovered.value = isHovered ? 1.0 : 0.0;
+			material.uniforms.isHovered!.value = isHovered ? 1.0 : 0.0;
 		}
 	}, [material, isHovered]);
 
@@ -362,8 +362,8 @@ function GalleryScene({
 		const time = state.clock.getElapsedTime();
 		materials.forEach((material) => {
 			if (material && material.uniforms) {
-				material.uniforms.time.value = time;
-				material.uniforms.scrollForce.value = scrollVelocity;
+				material.uniforms.time!.value = time;
+				material.uniforms.scrollForce!.value = scrollVelocity;
 			}
 		});
 
@@ -371,7 +371,6 @@ function GalleryScene({
 		const imageAdvance =
 			totalImages > 0 ? visibleCount % totalImages || totalImages : 0;
 		const totalRange = depthRange;
-		const halfRange = totalRange / 2;
 
 		planesData.current.forEach((plane, i) => {
 			let newZ = plane.z + scrollVelocity * delta * 10;
@@ -399,8 +398,6 @@ function GalleryScene({
 			plane.z = ((newZ % totalRange) + totalRange) % totalRange;
 			plane.x = spatialPositions[i]?.x ?? 0;
 			plane.y = spatialPositions[i]?.y ?? 0;
-
-			const worldZ = plane.z - halfRange;
 
 			// Calculate opacity based on fade settings
 			const normalizedPosition = plane.z / totalRange; // 0 to 1
@@ -470,8 +467,8 @@ function GalleryScene({
 			// Update material uniforms
 			const material = materials[i];
 			if (material && material.uniforms) {
-				material.uniforms.opacity.value = opacity;
-				material.uniforms.blurAmount.value = blur;
+				material.uniforms.opacity!.value = opacity;
+				material.uniforms.blurAmount!.value = blur;
 			}
 		});
 	});
@@ -491,8 +488,16 @@ function GalleryScene({
 				// Calculate scale to maintain aspect ratio
 				let aspect = 1;
 				if (texture.image) {
-					const img = texture.image as any;
-					if (img.width && img.height && typeof img.width === 'number' && typeof img.height === 'number') {
+					const img = texture.image as {
+						width?: number;
+						height?: number;
+					};
+					if (
+						typeof img.width === 'number' &&
+						typeof img.height === 'number' &&
+						img.width > 0 &&
+						img.height > 0
+					) {
 						aspect = img.width / img.height;
 					}
 				}
@@ -567,7 +572,7 @@ export default function InfiniteGallery({
 			if (!gl) {
 				setWebglSupported(false);
 			}
-		} catch (e) {
+		} catch {
 			setWebglSupported(false);
 		}
 	}, []);

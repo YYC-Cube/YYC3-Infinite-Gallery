@@ -1,7 +1,31 @@
-# 🎨 YYC3 Infinite Gallery
+---
+file: README.en.md
+title: YYC³ Infinite Gallery
+description: High-performance 3D infinite scroll gallery built with Next.js and Three.js
+author: YYC³ Team <admin@0379.email>
+version: v2.0.0
+created: 2025-09-15
+updated: 2026-11-18
+status: stable
+tags: [gallery, threejs, nextjs, pwa]
+category: project
+language: en-US
+audience: developers,users
+complexity: intermediate
+---
+
+# YYC³ Infinite Gallery
+
+> **_YYC³_**（YanYuCloudCube™ · 注册商标）
+> _言启象限 | 语枢未来_
+> **_Words Initiate Quadrants, Language Serves as Core for Future_**
+> _万象归元于云枢 | 深栈智启新纪元_
+> **_All things converge in cloud pivot; Deep stacks ignite a new era of intelligence_**
+
+---
 
 <p align="center">
-  <img src="public/D-1998.png" alt="YYC3 3D Gallery Preview" width="100%" />
+  <img src="public/D-1998.png" alt="YYC³ 3D Gallery Preview" width="100%" />
 </p>
 
 <p align="center">
@@ -368,16 +392,19 @@ We welcome new feature suggestions! Please use the "Feature Request" label in Is
 
 ---
 
-<p align="center">
-  <strong>🌹 Thank You for Using YYC3 Infinite Gallery!</strong>
-</p>
+## Changelog
+
+| Version | Date | Changes | Author |
+| ---- | ---- | ------- | ------ |
+| v2.0.0 | 2026-11-18 | Standardized front matter, branding and header/footer per YYC³ team standards; added floating media player and new image sources | YYC³ Team |
+
+---
 
 <p align="center">
-  We are committed to providing the best 3D content display experience.
-</p>
-
-<p align="center">
-  Built with ❤️ by <a href="https://yyc3.top">YYC³</a> ·
-  <a href="https://github.com/YYC-Cube/YYC3-Infinite-Gallery">GitHub</a> ·
-  <a href="https://gallery.yyc3.top">Live Demo</a>
+  <b>YYC³</b>（YanYuCloudCube™ · 注册商标）<br>
+  言启象限 | 语枢未来<br>
+  <i>Words Initiate Quadrants, Language Serves as Core for Future</i><br>
+  万象归元于云枢 | 深栈智启新纪元<br>
+  <i>All things converge in cloud pivot; Deep stacks ignite a new era of intelligence</i><br>
+  <sub>© 2026 YanYuCloudCube™（YYC³）· <a href="mailto:admin@0379.email">admin@0379.email</a></sub>
 </p>

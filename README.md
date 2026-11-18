@@ -1,7 +1,31 @@
-# 🎨 YYC3 Infinite Gallery
+---
+file: README.md
+title: YYC³ Infinite Gallery
+description: 基于 Next.js 与 Three.js 的高性能 3D 无限滚动画廊展示系统
+author: YYC³ Team <admin@0379.email>
+version: v2.0.0
+created: 2025-09-15
+updated: 2026-11-18
+status: stable
+tags: [gallery, threejs, nextjs, pwa]
+category: project
+language: zh-CN
+audience: developers,users
+complexity: intermediate
+---
+
+# YYC³ Infinite Gallery
+
+> **_YYC³_**（YanYuCloudCube™ · 注册商标）
+> _言启象限 | 语枢未来_
+> **_Words Initiate Quadrants, Language Serves as Core for Future_**
+> _万象归元于云枢 | 深栈智启新纪元_
+> **_All things converge in cloud pivot; Deep stacks ignite a new era of intelligence_**
+
+---
 
 <p align="center">
-  <img src="public/D-1998.png" alt="YYC3 3D Gallery Preview" width="100%" />
+  <img src="public/D-1998.png" alt="YYC³ 3D Gallery Preview" width="100%" />
 </p>
 
 <p align="center">
@@ -368,16 +392,19 @@ git push origin feat/your-feature
 
 ---
 
-<p align="center">
-  <strong>🌹 感谢使用 YYC3 Infinite Gallery！</strong>
-</p>
+## 变更历史
+
+| 版本 | 日期 | 变更内容 | 作者 |
+| ---- | ---- | -------- | ---- |
+| v2.0.0 | 2026-11-18 | 按 YYC³ 团队标规统一 front matter、品牌写法与标头标尾；新增悬浮音乐影像播放器与新图源 | YYC³ Team |
+
+---
 
 <p align="center">
-  我们致力于提供最佳的 3D 内容展示体验。
-</p>
-
-<p align="center">
-  Built with ❤️ by <a href="https://yyc3.top">YYC³</a> ·
-  <a href="https://github.com/YYC-Cube/YYC3-Infinite-Gallery">GitHub</a> ·
-  <a href="https://gallery.yyc3.top">Live Demo</a>
+  <b>YYC³</b>（YanYuCloudCube™ · 注册商标）<br>
+  言启象限 | 语枢未来<br>
+  <i>Words Initiate Quadrants, Language Serves as Core for Future</i><br>
+  万象归元于云枢 | 深栈智启新纪元<br>
+  <i>All things converge in cloud pivot; Deep stacks ignite a new era of intelligence</i><br>
+  <sub>© 2026 YanYuCloudCube™（YYC³）· <a href="mailto:admin@0379.email">admin@0379.email</a></sub>
 </p>
