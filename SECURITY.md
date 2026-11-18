@@ -3,7 +3,7 @@ file: SECURITY.md
 title: 安全政策
 description: YYC³ Infinite Gallery 安全漏洞报告渠道、响应承诺与处理流程
 author: YYC³ Team <admin@0379.email>
-version: v1.0.0
+version: v1.1.0
 created: 2026-11-18
 updated: 2026-11-18
 status: stable
@@ -48,12 +48,30 @@ complexity: basic
 
 报告 → 确认 → 分级（CVSS）→ 修复 → 回归测试 → 发布 → 协调披露与致谢。
 
+## 依赖安全门禁
+
+- **CI 门禁**：`.github/workflows/deploy.yml` 的 `quality` 阶段执行 `pnpm security:check`，存在可修复漏洞时阻断构建与部署。
+- **执行方式**：`pnpm security:check`（调用 `scripts/check-security.mjs`）。
+- **修复策略**：直接依赖升级 + `package.json` 中 `pnpm.overrides` 定点提升传递依赖；关闭 `auto-install-peers` 避免 optional peer 引入幽灵依赖图。
+- **豁免规则**：仅对上游尚未发布补丁（`patched: null`）的漏洞做白名单豁免，并注明来源与影响；补丁发布后须立即移除豁免。
+
+### 当前豁免清单
+
+| GHSA | 组件 | 原因 | 影响面 |
+|------|------|------|--------|
+| GHSA-fc5q-39xc-vjpf | picomatch <= 4.0.7 | 上游无补丁版本；来自 `@typescript-eslint → tinyglobby` 开发链 | 仅开发期，不进入生产运行时 |
+
+## 修复记录
+
+- **2026-11-18**：修复远程 Dependabot 全部 64 项告警（2 critical / 33 high / 22 medium / 7 low）。核心措施：升级 `next` 至 `16.4.6`、`sharp` 至 `0.35.5`；通过 overrides 修复 `node-forge`、`brace-expansion`、`js-yaml`、`minimatch`、`postcss`、`browserslist`、`fflate`、`glob`、`zod`、`ws`、`uuid`、`image-size`、`@babel/core` 等传递依赖；关闭 `auto-install-peers` 清除 expo 幽灵依赖图。审计结果由 64 项降至 2 项（均为上游无补丁的 picomatch 告警，已受控豁免）。
+
 ---
 
 ## 变更历史
 
 | 版本 | 日期 | 变更内容 | 作者 |
 | ---- | ---- | -------- | ---- |
+| v1.1.0 | 2026-11-18 | 新增依赖安全门禁、豁免规则与漏洞修复记录 | YYC³ Team |
 | v1.0.0 | 2026-11-18 | 按 YYC³ 团队标规统一 front matter、品牌写法与标头标尾 | YYC³ Team |
 
 ---
