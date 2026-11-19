@@ -593,3 +593,193 @@ body::before {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ========================================
+   🎭 多版本设计：断点与布局版本媒体查询
+   ======================================== */
+
+/* 断点版本：桌面 */
+html[data-breakpoint="desktop"] {
+  --gallery-max-width: 1600px;
+  --gallery-gap: 24px;
+}
+
+/* 断点版本：平板 */
+html[data-breakpoint="tablet"] {
+  --gallery-max-width: 1024px;
+  --gallery-gap: 16px;
+}
+
+/* 断点版本：移动 */
+html[data-breakpoint="mobile"] {
+  --gallery-max-width: 100vw;
+  --gallery-gap: 8px;
+}
+
+/* 布局版本：拆分（split） */
+html[data-layout="split"] .media-space-root {
+  position: fixed !important;
+  top: 18px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: min(700px, calc(100vw - 32px)) !important;
+  height: auto !important;
+  max-height: 85vh !important;
+  z-index: 9000 !important;
+  display: block !important;
+}
+
+/* 布局版本：统一（unified） */
+html[data-layout="unified"] .media-space-root {
+  position: fixed !important;
+  inset: 64px 18px 86px !important;
+  z-index: 9000 !important;
+  display: grid !important;
+}
+
+/* 移动端强制统一布局，无论用户如何选择 */
+@media (max-width: 767px) {
+  html[data-layout="split"] .media-space-root {
+    position: fixed !important;
+    inset: 54px 8px 76px !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+    left: auto !important;
+    top: auto !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 38px minmax(148px, 0.64fr) minmax(0, 1.36fr);
+    gap: 7px;
+    padding: 0 7px 7px;
+    border-radius: 18px;
+  }
+}
+
+/* 主题覆盖：深色夜间 */
+html[data-theme="deep-night"] .glass-effect {
+  background: rgba(5, 5, 7, 0.4);
+  border-color: rgba(139, 157, 195, 0.15);
+}
+
+/* 主题覆盖：极光 */
+html[data-theme="aurora"] .glass-effect {
+  background: rgba(6, 10, 14, 0.4);
+  border-color: rgba(52, 211, 153, 0.15);
+}
+
+/* 主题覆盖：极简 */
+html[data-theme="minimal"] .glass-effect {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(100, 116, 139, 0.15);
+  backdrop-filter: blur(12px);
+}
+
+/* 减少动效全局覆盖 */
+html[data-theme="minimal"] body::before,
+html[data-breakpoint="mobile"][data-reduced-motion="true"] body::before {
+  display: none;
+}
+
+/* 自定义属性：reducedMotion 通过 JS 设置，这里仅做兜底 */
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] ::before,
+html[data-reduced-motion="true"] ::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* ========================================
+   📱 移动端优化：触摸、手势、安全区、底部导航
+   ======================================== */
+
+/* 防止移动端双击缩放 */
+html {
+  touch-action: manipulation;
+}
+
+/* 移动端滚动条隐藏 */
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* 移动端安全区填充 */
+html {
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* 移动端媒体空间：底部导航适配 */
+@media (max-width: 767px) {
+  .media-space-root {
+    padding-bottom: calc(
+      env(safe-area-inset-bottom) + 76px
+    ) !important;
+  }
+
+  .media-space-root[data-mode="unified"] {
+    inset: 54px 8px 76px !important;
+  }
+
+  /* 底部按钮避开安全区 */
+  .fixed.bottom-24 {
+    bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* 防止触摸时页面整体滚动 */
+  body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 触摸目标最小尺寸 */
+  button,
+  [role="button"],
+  a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 移动端画廊容器全屏 */
+  .h-screen {
+    height: 100dvh !important;
+  }
+
+  /* 减少移动端光效，提升性能 */
+  body::before {
+    opacity: 0.5;
+    animation-duration: 40s;
+  }
+}
+
+/* 移动端媒体查询：收起非必要动画 */
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .animate-aura,
+  .animate-float,
+  .animate-breathe,
+  .animate-pulse-glow {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* 移动端拖拽/缩放：禁止默认浏览器行为 */
+.touch-none {
+  touch-action: none;
+}
+
+/* 移动端媒体空间按钮：触摸反馈 */
+.media-space-chrome button:active {
+  transform: scale(0.95);
+}
+
+/* 安全区变量兜底 */
+html:not([style*="--safe-area-inset-bottom"]) {
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+}

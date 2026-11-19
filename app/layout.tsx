@@ -40,6 +40,15 @@ export const metadata: Metadata = {
 		],
 	},
 	manifest: '/manifest.json',
+    other: {
+      'apple-mobile-web-app-capable': 'yes',
+      'apple-mobile-web-app-status-bar-style': 'black-translucent',
+      'apple-mobile-web-app-title': 'YYC3 Gallery',
+      'theme-color': '#0a0908',
+      'mobile-web-app-capable': 'yes',
+      'apple-touch-icon': '/D-icons/icon-192.png',
+      'apple-touch-startup-image': '/D-icons/icon-512.png',
+    },
     openGraph: {
         title: 'YYC3 Gallery Photography Template',
         description: '温润艺术风 · 3D无限滚动画廊系统',

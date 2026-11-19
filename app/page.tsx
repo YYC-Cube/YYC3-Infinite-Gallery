@@ -14,6 +14,9 @@ import ConfigPanel from "@/components/ConfigPanel";
 import MediaSpace from "@/components/media-space/MediaSpace";
 import PWAProvider from "@/components/PWAProvider";
 import WidgetLayer from "@/components/widgets/WidgetLayer";
+import ThemeVersionProvider from "@/components/ThemeVersionProvider";
+import VersionSwitcher from "@/components/VersionSwitcher";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import type { GalleryConfig } from "@/lib/config-store";
 import { GALLERY_IMAGES } from "@/lib/media-store";
 import {
@@ -64,7 +67,10 @@ export default function Home() {
 
   return (
     <main className="min-h-screen relative">
+      <ThemeVersionProvider />
       <PWAProvider />
+      <VersionSwitcher />
+      <MobileBottomNav />
       {/* 自定义背景层 */}
       {config.backgroundImage && (
         <div
