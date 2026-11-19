@@ -19,6 +19,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# browser verification artifacts
+/.playwright-cli/
+
 # env files
 .env*
 
@@ -28,3 +31,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 文档不提交远程，仅本地保留
+/docs/
