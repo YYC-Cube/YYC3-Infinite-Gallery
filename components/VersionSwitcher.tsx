@@ -51,7 +51,7 @@ export default function VersionSwitcher() {
 
   return (
     <div
-      className="fixed bottom-6 right-6 z-[9998] flex flex-col gap-2"
+      className="version-switcher fixed bottom-6 right-6 z-[9998] flex flex-col gap-2"
       aria-label="版本切换面板"
     >
       <div className="glass-effect rounded-2xl border border-warm/25 p-3 shadow-2xl backdrop-blur-xl">

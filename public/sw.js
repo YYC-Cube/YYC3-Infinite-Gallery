@@ -2,9 +2,9 @@
  * YYC³ Infinite Gallery Service Worker
  * @description 应用壳离线缓存；媒体流、Range 请求和宿主 API 不进入自动缓存
  * @author YYC³
- * @version 3.0.0
+ * @version 3.1.0
  * @created 2026-01-15
- * @updated 2026-11-19
+ * @updated 2026-11-20
  */
 
 const SW_BUILD = "__YYC3_SW_VERSION__";
@@ -62,6 +62,20 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     void self.skipWaiting();
+  }
+  if (event.data?.type === "CACHE_STATUS") {
+    void caches.keys().then(async (keys) => {
+      const staticCache = await caches.open(STATIC_CACHE);
+      const cachedCount = (await staticCache.keys()).length;
+      const client = event.source;
+      if (client) {
+        client.postMessage({
+          type: "CACHE_STATUS_RESULT",
+          preloaded: cachedCount,
+          runtimeCaches: keys.filter((key) => key === RUNTIME_CACHE).length,
+        });
+      }
+    });
   }
 });
 
@@ -165,7 +179,8 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.destination === "image") {
-    event.respondWith(staleWhileRevalidate(request));
+    // 画廊图片内容为不可变静态资源，缓存优先可显著降低流量并支持离线浏览
+    event.respondWith(cacheFirst(request));
     return;
   }
 

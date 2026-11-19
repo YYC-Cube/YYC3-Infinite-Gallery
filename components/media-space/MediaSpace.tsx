@@ -2,9 +2,9 @@
  * @file 自主媒体空间
  * @description 统一界面与独立浮窗共用同一组媒体实例，切换布局不重建播放状态
  * @author YYC³
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2026-11-19
- * @updated 2026-11-19
+ * @updated 2026-11-20
  */
 "use client";
 
@@ -23,6 +23,7 @@ import type { GalleryConfig } from "@/lib/config-store";
 import type { MediaTrack } from "@/lib/media-store";
 import type { MediaSessionState } from "@/lib/media-space/store";
 import { loadMediaFiles, storeMediaFile } from "@/lib/media-db";
+import { syncMediaManifest } from "@/lib/media-sync";
 import {
   addVideoSession,
   appendTracks,
@@ -149,6 +150,8 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
         });
       }
       appendTracks(sessionId, added, true);
+      // 元数据清单同步：离线时自动进入宿主 outbox，联网后补传
+      void syncMediaManifest();
     },
     [space.sessions],
   );

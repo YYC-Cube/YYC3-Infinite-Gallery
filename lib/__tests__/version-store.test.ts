@@ -94,13 +94,26 @@ describe("version-store", () => {
     expect(def.id).toBe("warm-art");
   });
 
-  test("THEME_DEFINITIONS 应包含 4 个主题", () => {
-    expect(THEME_DEFINITIONS).toHaveLength(4);
+  test("THEME_DEFINITIONS 应包含 7 个主题", () => {
+    expect(THEME_DEFINITIONS).toHaveLength(7);
     const ids = THEME_DEFINITIONS.map((t) => t.id);
     expect(ids).toContain("warm-art");
     expect(ids).toContain("deep-night");
     expect(ids).toContain("aurora");
     expect(ids).toContain("minimal");
+    expect(ids).toContain("cyberpunk");
+    expect(ids).toContain("ink-wash");
+    expect(ids).toContain("polar");
+  });
+
+  test("新增主题应提供完整色彩定义", () => {
+    ["cyberpunk", "ink-wash", "polar"].forEach((id) => {
+      const def = getThemeDefinition(id as any);
+      expect(def.colors["--background"]).toBeDefined();
+      expect(def.colors["--foreground"]).toBeDefined();
+      expect(def.colors["--warm-primary"]).toBeDefined();
+      expect(def.colors["--text-primary"]).toBeDefined();
+    });
   });
 
   test("getBreakpointFromWidth 按阈值划分", () => {

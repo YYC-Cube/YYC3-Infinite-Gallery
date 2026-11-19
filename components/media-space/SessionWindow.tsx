@@ -2,9 +2,9 @@
  * @file 独立媒体会话窗口
  * @description 音频与每个视频实例拥有独立控制、队列和空间背景；布局只改变窗口归属
  * @author YYC³
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2026-11-19
- * @updated 2026-11-19
+ * @updated 2026-11-20
  */
 "use client";
 
@@ -16,6 +16,7 @@ import {
   Disc3,
   Expand,
   GripVertical,
+  Heart,
   ListMusic,
   Maximize2,
   Minimize2,
@@ -34,6 +35,8 @@ import {
   X,
 } from "lucide-react";
 import type { GalleryConfig } from "@/lib/config-store";
+import { toggleFavorite, useFavorites } from "@/lib/favorites-store";
+import { useMediaGestures } from "@/hooks/use-media-gestures";
 import type { MediaSessionState, WindowFrame } from "@/lib/media-space/store";
 import {
   cycleRepeat,
@@ -98,8 +101,42 @@ export default function SessionWindow({
     frame: WindowFrame;
   } | null>(null);
   const restoredTimeRef = useRef(false);
+  const pinchVolumeRef = useRef(session.volume);
   const [showQueue, setShowQueue] = useState(false);
+  const [gestureTip, setGestureTip] = useState("");
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
+  const favorites = useFavorites();
+
+  const showGestureTip = useCallback((message: string) => {
+    setGestureTip(message);
+    window.setTimeout(() => setGestureTip(""), 1400);
+  }, []);
+
+  const gesture = useMediaGestures({
+    onSwipeNext: () => {
+      stepTrack(session.id, 1, true);
+      showGestureTip("下一首");
+    },
+    onSwipePrev: () => {
+      stepTrack(session.id, -1, true);
+      showGestureTip("上一首");
+    },
+    onPinchStart: () => {
+      pinchVolumeRef.current = session.volume;
+    },
+    onPinch: (scale) => {
+      const next = Math.min(1, Math.max(0, pinchVolumeRef.current * scale));
+      setSessionVolume(session.id, next);
+    },
+    onLongPress: () => {
+      const item = getSessionTrack(session);
+      if (!item) return;
+      const added = toggleFavorite(item.id);
+      showGestureTip(added ? "已收藏" : "已取消收藏");
+    },
+  });
+
+  const currentTrackIsFavorite = track ? favorites.includes(track.id) : false;
 
   useEffect(() => {
     const update = () =>
@@ -376,7 +413,8 @@ export default function SessionWindow({
       <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-2 p-2 sm:p-3">
         {isVideo ? (
           <div
-            className={`relative min-h-[80px] flex-1 overflow-hidden rounded-xl border border-warm/10 bg-black/60 ${
+            {...gesture.handlers}
+            className={`media-gesture-surface relative min-h-[80px] flex-1 touch-none overflow-hidden rounded-xl border border-warm/10 bg-black/60 ${
               session.orientation === "portrait"
                 ? "mx-auto w-full max-w-[min(100%,48vh)]"
                 : "w-full"
@@ -393,9 +431,21 @@ export default function SessionWindow({
                 initialTime={session.currentTime}
               />
             )}
+            {(gesture.isLongPressing || gesture.pinchScale !== 1) && (
+              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
+                <span className="rounded-full border border-warm/30 bg-black/60 px-3 py-1.5 text-[10px] font-mono text-warm-primary">
+                  {gesture.isLongPressing
+                    ? "松开收藏"
+                    : `音量 ${Math.round(session.volume * 100)}%`}
+                </span>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="relative flex min-h-[104px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-warm/10 bg-black/20">
+          <div
+            {...gesture.handlers}
+            className="media-gesture-surface relative flex min-h-[104px] flex-1 touch-none items-center justify-center overflow-hidden rounded-xl border border-warm/10 bg-black/20"
+          >
             <audio
               ref={audioRef}
               src={activeTrack?.src}
@@ -456,6 +506,29 @@ export default function SessionWindow({
                 {activeTrack?.artist} · {activeTrack?.album}
               </p>
             </div>
+
+            {currentTrackIsFavorite && (
+              <Heart
+                size={14}
+                className="absolute right-2 top-2 z-10 fill-warm-primary text-warm-primary"
+                aria-label="已收藏"
+              />
+            )}
+            {(gesture.isLongPressing || gesture.pinchScale !== 1) && (
+              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
+                <span className="rounded-full border border-warm/30 bg-black/60 px-3 py-1.5 text-[10px] font-mono text-warm-primary">
+                  {gesture.isLongPressing
+                    ? "松开收藏"
+                    : `音量 ${Math.round(session.volume * 100)}%`}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {gestureTip && (
+          <div className="pointer-events-none absolute left-1/2 top-12 z-30 -translate-x-1/2 rounded-full border border-warm/25 bg-[#0a0908]/85 px-3 py-1 text-[10px] font-mono text-warm-primary shadow-xl backdrop-blur-xl">
+            {gestureTip}
           </div>
         )}
 

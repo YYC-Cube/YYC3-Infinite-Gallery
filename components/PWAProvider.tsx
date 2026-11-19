@@ -2,7 +2,7 @@
  * @file PWA 与宿主运行时
  * @description 注册 Service Worker、探测宿主机能力、显示离线状态与可安装性提示
  * @author YYC³
- * @version 1.1.0
+ * @version 1.2.0
  * @created 2026-11-19
  * @updated 2026-11-20
  */
@@ -29,6 +29,7 @@ export default function PWAProvider() {
   >(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
+  const [cachedCount, setCachedCount] = useState(0);
   const dismissRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -45,17 +46,25 @@ export default function PWAProvider() {
   useEffect(() => {
     void probeHost();
 
+    // 查询预缓存资源数量，用于离线就绪状态展示
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === "CACHE_STATUS_RESULT") {
+        setCachedCount(Number(event.data.preloaded) || 0);
+      }
+    };
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", onMessage);
+    }
+
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-      void navigator.serviceWorker.register("/sw.js").then((registration) => {
-        // 检查是否已安装为 PWA
-        if (registration.active) {
-          void navigator.serviceWorker.ready.then(() => {
-            // standalone 模式下认为已安装
-            if (window.matchMedia("(display-mode: standalone)").matches) {
-              setIsInstalled(true);
-            }
-          });
-        }
+      void navigator.serviceWorker.register("/sw.js").then(() => {
+        void navigator.serviceWorker.ready.then((registration) => {
+          // standalone 模式下认为已安装
+          if (window.matchMedia("(display-mode: standalone)").matches) {
+            setIsInstalled(true);
+          }
+          registration.active?.postMessage({ type: "CACHE_STATUS" });
+        });
       }).catch(() => {
         /* PWA 不可用时不影响主应用 */
       });
@@ -82,6 +91,9 @@ export default function PWAProvider() {
       if (document.visibilityState === "visible") void probeHost();
     }, 60 * 1000);
     return () => {
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.removeEventListener("message", onMessage);
+      }
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("online", onOnline);
       window.clearInterval(timer);
@@ -124,7 +136,7 @@ export default function PWAProvider() {
             {host.connection === "incompatible"
               ? "宿主版本不兼容 · 本地缓存模式"
               : !browserOnline
-                ? "网络离线 · 已缓存的媒体与组件仍可用"
+                ? `网络离线 · ${cachedCount > 0 ? `${cachedCount} 项资源已缓存，` : ""}媒体仍可用`
                 : "宿主机离线 · 修改将排队同步"}
           </span>
         </div>

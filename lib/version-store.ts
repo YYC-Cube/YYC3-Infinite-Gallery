@@ -10,7 +10,14 @@
 import { useSyncExternalStore } from "react";
 import { hostStorageSet } from "@/lib/host-bridge";
 
-export type GalleryTheme = "warm-art" | "deep-night" | "aurora" | "minimal";
+export type GalleryTheme =
+  | "warm-art"
+  | "deep-night"
+  | "aurora"
+  | "minimal"
+  | "cyberpunk"
+  | "ink-wash"
+  | "polar";
 export type LayoutVersion = "split" | "unified";
 export type BreakpointVersion = "desktop" | "tablet" | "mobile";
 
@@ -114,6 +121,69 @@ export const THEME_DEFINITIONS: ThemeDefinition[] = [
       "--text-muted": "rgba(15, 23, 42, 0.4)",
       "--glow-intensity": "0.5",
       "--blur-amount": "24px",
+    },
+  },
+  {
+    id: "cyberpunk",
+    name: "赛博朋克",
+    description: "霓虹紫青对比，未来科技感",
+    colors: {
+      "--background": "#080611",
+      "--foreground": "#f0e9ff",
+      "--warm-primary": "#d946ef",
+      "--warm-secondary": "#a855f7",
+      "--warm-accent": "#22d3ee",
+      "--ambient-top": "rgba(217, 70, 239, 0.10)",
+      "--ambient-left": "rgba(168, 85, 247, 0.08)",
+      "--ambient-right": "rgba(34, 211, 238, 0.07)",
+      "--ambient-center": "rgba(192, 132, 252, 0.04)",
+      "--text-primary": "rgba(240, 233, 255, 0.92)",
+      "--text-secondary": "rgba(240, 233, 255, 0.72)",
+      "--text-muted": "rgba(240, 233, 255, 0.42)",
+      "--glow-intensity": "1.4",
+      "--blur-amount": "44px",
+    },
+  },
+  {
+    id: "ink-wash",
+    name: "水墨丹青",
+    description: "宣纸墨色，东方极简意境",
+    colors: {
+      "--background": "#ece8df",
+      "--foreground": "#1c1a17",
+      "--warm-primary": "#4a453d",
+      "--warm-secondary": "#6b6459",
+      "--warm-accent": "#8c8476",
+      "--ambient-top": "rgba(74, 69, 61, 0.05)",
+      "--ambient-left": "rgba(107, 100, 89, 0.04)",
+      "--ambient-right": "rgba(140, 132, 118, 0.03)",
+      "--ambient-center": "rgba(60, 56, 50, 0.02)",
+      "--text-primary": "rgba(28, 26, 23, 0.9)",
+      "--text-secondary": "rgba(28, 26, 23, 0.7)",
+      "--text-muted": "rgba(28, 26, 23, 0.4)",
+      "--glow-intensity": "0.4",
+      "--blur-amount": "20px",
+    },
+  },
+  {
+    id: "polar",
+    name: "极地冰川",
+    description: "冰蓝冷白，通透清冽质感",
+    colors: {
+      "--background": "#e8f4f8",
+      "--foreground": "#0f2b3d",
+      "--warm-primary": "#0ea5c4",
+      "--warm-secondary": "#0891b2",
+      "--warm-accent": "#67e8f9",
+      "--ambient-top": "rgba(14, 165, 196, 0.06)",
+      "--ambient-left": "rgba(8, 145, 178, 0.05)",
+      "--ambient-right": "rgba(103, 232, 249, 0.04)",
+      "--ambient-center": "rgba(34, 211, 238, 0.02)",
+      "--text-primary": "rgba(15, 43, 61, 0.9)",
+      "--text-secondary": "rgba(15, 43, 61, 0.7)",
+      "--text-muted": "rgba(15, 43, 61, 0.4)",
+      "--glow-intensity": "0.6",
+      "--blur-amount": "28px",
     },
   },
 ];
