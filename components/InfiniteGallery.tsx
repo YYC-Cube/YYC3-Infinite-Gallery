@@ -2,8 +2,9 @@
  * @file InfiniteGallery 组件
  * @description 3D无限滚动画廊组件，使用React Three Fiber实现沉浸式图片展示效果
  * @author YYC³
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2025-09-15
+ * @updated 2026-11-20
  */
 'use client';
 
@@ -61,6 +62,8 @@ interface InfiniteGalleryProps {
 	className?: string;
 	/** Optional style for outer container */
 	style?: React.CSSProperties;
+	/** 当前最靠近镜头的图片索引变化时回调（用于行为采集/推荐） */
+	onFocusImage?: (imageIndex: number) => void;
 }
 
 interface PlaneData {
@@ -224,10 +227,12 @@ function GalleryScene({
 		blurOut: { start: 0.9, end: 1.0 },
 		maxBlur: 3.0,
 	},
+	onFocusImage,
 }: Omit<InfiniteGalleryProps, 'className' | 'style'>) {
 	const [scrollVelocity, setScrollVelocity] = useState(0);
 	const [autoPlay, setAutoPlay] = useState(true);
 	const lastInteraction = useRef(Date.now());
+	const lastFocusedIndex = useRef<number>(-1);
 
 	// Normalize images to objects
 	const normalizedImages = useMemo(
@@ -372,6 +377,9 @@ function GalleryScene({
 			totalImages > 0 ? visibleCount % totalImages || totalImages : 0;
 		const totalRange = depthRange;
 
+		let closestImageIndex = -1;
+		let closestDistance = Number.POSITIVE_INFINITY;
+
 		planesData.current.forEach((plane, i) => {
 			let newZ = plane.z + scrollVelocity * delta * 10;
 			let wrapsForward = 0;
@@ -432,6 +440,14 @@ function GalleryScene({
 			// Clamp opacity between 0 and 1
 			opacity = Math.max(0, Math.min(1, opacity));
 
+			// 追踪最靠近镜头的图片（worldZ 接近 0）
+			const worldZ = plane.z - depthRange / 2;
+			const distanceToCamera = Math.abs(worldZ);
+			if (opacity > 0.3 && distanceToCamera < closestDistance) {
+				closestDistance = distanceToCamera;
+				closestImageIndex = plane.imageIndex;
+			}
+
 			// Calculate blur based on blur settings
 			let blur = 0;
 
@@ -471,6 +487,16 @@ function GalleryScene({
 				material.uniforms.blurAmount!.value = blur;
 			}
 		});
+
+		// 焦点变化回调（用于行为采集）：仅当最靠近镜头的图片索引改变时触发
+		if (
+			onFocusImage &&
+			closestImageIndex >= 0 &&
+			closestImageIndex !== lastFocusedIndex.current
+		) {
+			lastFocusedIndex.current = closestImageIndex;
+			onFocusImage(closestImageIndex);
+		}
 	});
 
 	if (normalizedImages.length === 0) return null;
@@ -551,6 +577,7 @@ export default function InfiniteGallery({
 	images,
 	className = 'h-96 w-full',
 	style,
+	onFocusImage,
 	fadeSettings = {
 		fadeIn: { start: 0.05, end: 0.25 },
 		fadeOut: { start: 0.4, end: 0.43 },
@@ -595,6 +622,7 @@ export default function InfiniteGallery({
 					images={images}
 					fadeSettings={fadeSettings}
 					blurSettings={blurSettings}
+					onFocusImage={onFocusImage}
 				/>
 			</Canvas>
 		</div>

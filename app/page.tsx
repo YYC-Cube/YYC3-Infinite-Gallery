@@ -2,13 +2,14 @@
  * @file 主页组件 - 温润艺术风全功能版
  * @description 集成自定义配置系统的3D画廊主页
  * @author YYC³
- * @version 3.0.0 (温润艺术风 + 自定义系统)
+ * @version 3.1.0 (智能推荐 + 国际化 + AI 标注)
  * @created 2025-09-15
- * @updated 2025-09-22
+ * @updated 2026-11-20
  */
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Sparkles } from "lucide-react";
 import InfiniteGallery from "@/components/InfiniteGallery";
 import ConfigPanel from "@/components/ConfigPanel";
 import MediaSpace from "@/components/media-space/MediaSpace";
@@ -18,8 +19,22 @@ import ThemeVersionProvider from "@/components/ThemeVersionProvider";
 import VersionSwitcher from "@/components/VersionSwitcher";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
+import XREntry from "@/components/XREntry";
+import { t, useLocale } from "@/lib/i18n";
+import {
+  annotate,
+  getAnnotation,
+  type ImageAnnotation,
+} from "@/lib/annotation-store";
 import type { GalleryConfig } from "@/lib/config-store";
 import { GALLERY_IMAGES } from "@/lib/media-store";
+import {
+  getRecommendationSnapshot,
+  recordExposure,
+  recordInteraction,
+  recommendOrder,
+} from "@/lib/recommendation-store";
 import {
   DEFAULT_CONFIG,
   loadConfig,
@@ -32,6 +47,20 @@ export default function Home() {
   const [config, setConfig] = useState<GalleryConfig>(DEFAULT_CONFIG);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [focusAnnotation, setFocusAnnotation] =
+    useState<ImageAnnotation | null>(null);
+  const locale = useLocale();
+  const focusRef = useRef<{ src: string; since: number } | null>(null);
+
+  // 推荐排序仅在挂载时基于历史偏好计算一次，避免浏览中画面跳动
+  const orderedImages = useMemo(() => {
+    const base = GALLERY_IMAGES.map((src, index) => ({
+      src,
+      alt: `音乐影像作品 ${index + 1}`,
+    }));
+    const snapshot = getRecommendationSnapshot();
+    return recommendOrder(base, snapshot.affinity, snapshot.enabled);
+  }, []);
 
   useEffect(() => {
     setIsClient(true);
@@ -59,10 +88,38 @@ export default function Home() {
     setConfig(newConfig);
   }, []);
 
-  const sampleImages = GALLERY_IMAGES.map((src, index) => ({
-    src,
-    alt: `音乐影像作品 ${index + 1}`,
-  }));
+  // 焦点变化：结算上一张曝光时长，记录新焦点（推荐数据只采集不触发重排）
+  const handleFocusImage = useCallback(
+    (imageIndex: number) => {
+      const now = Date.now();
+      if (focusRef.current) {
+        recordExposure(focusRef.current.src, now - focusRef.current.since);
+      }
+      const src = orderedImages[imageIndex]?.src;
+      if (src) {
+        focusRef.current = { src, since: now };
+        recordInteraction(src);
+        const cached = getAnnotation(src);
+        if (cached) {
+          setFocusAnnotation(cached);
+        } else {
+          void annotate(src, src).then(setFocusAnnotation);
+        }
+      }
+    },
+    [orderedImages],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (focusRef.current) {
+        recordExposure(
+          focusRef.current.src,
+          Date.now() - focusRef.current.since,
+        );
+      }
+    };
+  }, []);
 
   if (!isClient) return null;
 
@@ -72,6 +129,8 @@ export default function Home() {
       <PWAProvider />
       <PerformanceMonitor />
       <VersionSwitcher />
+      <LocaleSwitcher />
+      <XREntry />
       <MobileBottomNav />
       {/* 自定义背景层 */}
       {config.backgroundImage && (
@@ -89,13 +148,36 @@ export default function Home() {
       )}
 
       <InfiniteGallery
-        images={sampleImages}
+        images={orderedImages}
         speed={1.2}
         zSpacing={3}
         visibleCount={12}
         falloff={{ near: 0.8, far: 14 }}
+        onFocusImage={handleFocusImage}
         className="h-screen w-full rounded-lg overflow-hidden relative z-10"
       />
+
+      {/* AI 内容标注：当前焦点作品标签 */}
+      {focusAnnotation && (
+        <div className="fixed left-5 top-6 z-[9997] max-w-[220px] rounded-xl border border-warm/20 bg-[#0a0908]/75 px-3 py-2 shadow-xl backdrop-blur-xl sm:left-6">
+          <div className="mb-1 flex items-center gap-1.5">
+            <Sparkles size={11} className="text-warm-primary" />
+            <span className="text-[9px] font-mono tracking-widest text-warm-primary/70">
+              AI TAGS · {focusAnnotation.source === "local" ? "LOCAL" : "AI"}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {focusAnnotation.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-warm/20 bg-warm/10 px-2 py-0.5 text-[9px] text-white/70"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ========================================
 			    高级感页脚系统 (完全可配置)
@@ -192,7 +274,9 @@ export default function Home() {
               animationDelay: `${config.revealDelay}s`,
             }}
           >
-            <span className="inline-block animate-float">言启象限</span>
+            <span className="inline-block animate-float">
+              {t("brand.line1", locale)}
+            </span>
             <span
               className="mx-2 sm:mx-3 md:mx-4 font-light"
               style={{
@@ -206,7 +290,7 @@ export default function Home() {
               className="inline-block animate-float"
               style={{ animationDelay: "0.5s" }}
             >
-              语枢未来
+              {t("brand.line2", locale)}
             </span>
           </p>
 
@@ -227,7 +311,7 @@ export default function Home() {
                 />
               </svg>
               <span className="text-[10px] tracking-widest uppercase font-mono">
-                Scroll to Explore
+                {t("hint.scroll", locale)}
               </span>
             </div>
           )}

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useMediaSpace, setSpaceOpen } from "@/lib/media-space/store";
 import { useWidgets, setWidgetEnabled } from "@/lib/widget-store";
+import { t, useLocale } from "@/lib/i18n";
 
 
 export type MobileTab = "gallery" | "media" | "widgets" | "design";
@@ -30,16 +31,10 @@ const TAB_ICONS: Record<MobileTab, React.ComponentType<{ size?: number | string 
   design: Settings,
 };
 
-const TAB_LABELS: Record<MobileTab, string> = {
-  gallery: "画廊",
-  media: "媒体",
-  widgets: "组件",
-  design: "设计",
-};
-
 export default function MobileBottomNav() {
   const space = useMediaSpace();
   const widgets = useWidgets();
+  const locale = useLocale();
   const [activeTab, setActiveTab] = useState<MobileTab>("gallery");
   const [isMobile, setIsMobile] = useState(false);
   const [safeAreaBottom, setSafeAreaBottom] = useState(0);
@@ -114,16 +109,16 @@ export default function MobileBottomNav() {
                   ? "bg-warm/20 text-warm-primary border border-warm/40"
                   : "text-white/40 hover:text-warm-primary hover:bg-white/5"
               }`}
-              aria-label={TAB_LABELS[tab]}
+              aria-label={t(`nav.${tab}`, locale)}
               aria-pressed={isActive}
               aria-selected={isActive}
               aria-controls={`mobile-tab-${tab}`}
               id={`mobile-tab-${tab}`}
-              title={TAB_LABELS[tab]}
+              title={t(`nav.${tab}`, locale)}
             >
               <Icon size={16} />
               <span className="text-[9px] font-mono leading-none">
-                {TAB_LABELS[tab]}
+                {t(`nav.${tab}`, locale)}
               </span>
             </button>
           );
