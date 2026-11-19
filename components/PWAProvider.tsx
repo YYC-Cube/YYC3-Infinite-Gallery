@@ -16,13 +16,20 @@ import {
 } from "lucide-react";
 import { flushOutbox, probeHost, useHostState } from "@/lib/host-bridge";
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
 export default function PWAProvider() {
   const host = useHostState();
   const [browserOnline, setBrowserOnline] = useState(true);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<
+    BeforeInstallPromptEvent | null
+  >(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
-  const dismissRef = useRef<number>(null);
+  const dismissRef = useRef<number | null>(null);
 
   useEffect(() => {
     const sync = () => setBrowserOnline(navigator.onLine);
@@ -54,8 +61,9 @@ export default function PWAProvider() {
       });
     }
 
-    const onBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
+    const onBeforeInstallPrompt = (rawEvent: Event) => {
+      rawEvent.preventDefault();
+      const event = rawEvent as BeforeInstallPromptEvent;
       setDeferredPrompt(event);
       // 仅在非独立模式下显示安装提示，且不打扰已安装用户
       if (!isInstalled && window.matchMedia("(display-mode: browser)").matches) {

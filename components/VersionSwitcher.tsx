@@ -2,8 +2,9 @@
  * @file 多版本切换器
  * @description 悬浮版本控制面板，支持主题/断点/布局切换
  * @author YYC³
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2026-11-20
+ * @updated 2026-11-20
  */
 "use client";
 
@@ -12,6 +13,7 @@ import { LayoutDashboard, Smartphone, Monitor, Palette, ArrowLeftRight } from "l
 
 import {
   setBreakpoint,
+  resetBreakpoint,
   setLayout,
   setTheme,
   setReducedMotion,
@@ -126,13 +128,26 @@ export default function VersionSwitcher() {
             <span className="text-[10px] text-white/60">断点版本</span>
           </div>
           <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={resetBreakpoint}
+              className={`flex-1 py-1.5 rounded-lg border text-[10px] font-mono transition-all ${
+                !version.breakpointOverride
+                  ? "bg-warm/20 border-warm/40 text-warm-primary"
+                  : "border-warm/15 bg-black/30 text-white/40 hover:border-warm/30"
+              }`}
+              title="自动响应窗口宽度（CSS 原生）"
+              aria-label="自动断点模式"
+            >
+              自动
+            </button>
             {(["desktop", "tablet", "mobile"] as const).map((bp) => (
               <button
                 key={bp}
                 type="button"
                 onClick={() => handleBreakpointChange(bp)}
                 className={`flex-1 py-1.5 rounded-lg border text-[10px] font-mono transition-all ${
-                  version.breakpoint === bp
+                  version.breakpointOverride && version.breakpoint === bp
                     ? "bg-warm/20 border-warm/40 text-warm-primary"
                     : "border-warm/15 bg-black/30 text-white/40 hover:border-warm/30"
                 }`}

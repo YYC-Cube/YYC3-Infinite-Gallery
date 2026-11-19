@@ -17,6 +17,7 @@ import WidgetLayer from "@/components/widgets/WidgetLayer";
 import ThemeVersionProvider from "@/components/ThemeVersionProvider";
 import VersionSwitcher from "@/components/VersionSwitcher";
 import MobileBottomNav from "@/components/MobileBottomNav";
+import PerformanceMonitor from "@/components/PerformanceMonitor";
 import type { GalleryConfig } from "@/lib/config-store";
 import { GALLERY_IMAGES } from "@/lib/media-store";
 import {
@@ -69,6 +70,7 @@ export default function Home() {
     <main className="min-h-screen relative">
       <ThemeVersionProvider />
       <PWAProvider />
+      <PerformanceMonitor />
       <VersionSwitcher />
       <MobileBottomNav />
       {/* 自定义背景层 */}

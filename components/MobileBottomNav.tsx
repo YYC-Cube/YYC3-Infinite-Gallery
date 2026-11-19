@@ -2,8 +2,9 @@
  * @file 移动端底部导航
  * @description 移动端安全区适配、底部导航栏与触摸手势增强
  * @author YYC³
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2026-11-20
+ * @updated 2026-11-20
  */
 "use client";
 
@@ -74,16 +75,29 @@ export default function MobileBottomNav() {
     }
   }, [space.isOpen]);
 
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent, tab: MobileTab) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleTabPress(tab);
+      }
+    },
+    [handleTabPress],
+  );
+
   return (
     <nav
+      role="navigation"
+      aria-label="移动端底部导航"
       className="fixed bottom-0 left-0 right-0 z-[10001] flex items-center justify-center gap-1 px-3 sm:px-4"
       style={{
         paddingBottom: `calc(${safeAreaBottom}px + 8px)`,
       }}
-      aria-label="移动端底部导航"
     >
       <div
         className="flex h-10 w-full max-w-md items-center justify-center rounded-full border border-warm/20 bg-[#0a0908]/85 px-2 py-1.5 shadow-2xl backdrop-blur-xl"
+        role="tablist"
+        aria-label="标签页导航"
       >
         {MOBILE_TABS.map((tab) => {
           const Icon = TAB_ICONS[tab];
@@ -92,7 +106,9 @@ export default function MobileBottomNav() {
             <button
               key={tab}
               type="button"
+              role="tab"
               onClick={() => handleTabPress(tab)}
+              onKeyDown={(e) => handleKeyDown(e, tab)}
               className={`flex h-8 w-8 flex-col items-center justify-center gap-0.5 rounded-lg transition-all duration-200 ${
                 isActive
                   ? "bg-warm/20 text-warm-primary border border-warm/40"
@@ -100,6 +116,9 @@ export default function MobileBottomNav() {
               }`}
               aria-label={TAB_LABELS[tab]}
               aria-pressed={isActive}
+              aria-selected={isActive}
+              aria-controls={`mobile-tab-${tab}`}
+              id={`mobile-tab-${tab}`}
               title={TAB_LABELS[tab]}
             >
               <Icon size={16} />
@@ -113,7 +132,11 @@ export default function MobileBottomNav() {
 
       {/* 快捷操作提示（仅在非媒体/设计标签时显示） */}
       {activeTab === "gallery" && (
-        <div className="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-[10000] flex items-center gap-2 rounded-lg border border-warm/20 bg-[#0a0908]/90 px-3 py-2 shadow-2xl backdrop-blur-xl animate-fade-in-up">
+        <div
+          className="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-[10000] flex items-center gap-2 rounded-lg border border-warm/20 bg-[#0a0908]/90 px-3 py-2 shadow-2xl backdrop-blur-xl animate-fade-in-up"
+          role="region"
+          aria-label="快捷操作提示"
+        >
           <span className="text-[10px] text-warm-primary/70">轻触切换空间</span>
           <button
             type="button"
@@ -122,6 +145,7 @@ export default function MobileBottomNav() {
               setActiveTab("media");
             }}
             className="h-6 w-6 rounded-full border border-warm/30 bg-black/40 flex items-center justify-center text-[10px] text-warm-primary hover:bg-warm/20"
+            aria-label="打开媒体空间"
           >
             <Disc3 size={10} />
           </button>
@@ -138,6 +162,7 @@ export default function MobileBottomNav() {
               setActiveTab("widgets");
             }}
             className="h-6 w-6 rounded-full border border-warm/30 bg-black/40 flex items-center justify-center text-[10px] text-warm-primary hover:bg-warm/20"
+            aria-label="打开组件面板"
           >
             <Smartphone size={10} />
           </button>

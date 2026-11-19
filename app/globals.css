@@ -2,9 +2,9 @@
  * @file 全局样式文件 - 温润艺术风主题
  * @description 可自定义的高级感设计系统 - 温暖艺术氛围
  * @author YYC³
- * @version 3.0.0 (温润艺术风)
+ * @version 3.1.0 (断点 CSS 化 + 移动端优化)
  * @created 2025-09-15
- * @updated 2025-09-22
+ * @updated 2026-11-20
  */
 @import "tailwindcss";
 
@@ -598,19 +598,37 @@ body::before {
    🎭 多版本设计：断点与布局版本媒体查询
    ======================================== */
 
-/* 断点版本：桌面 */
+/* 自动断点：CSS @media 原生响应，无需 JS，首屏即生效 */
+html {
+  --gallery-max-width: 1600px;
+  --gallery-gap: 24px;
+}
+
+@media (max-width: 1023px) {
+  html {
+    --gallery-max-width: 1024px;
+    --gallery-gap: 16px;
+  }
+}
+
+@media (max-width: 767px) {
+  html {
+    --gallery-max-width: 100vw;
+    --gallery-gap: 8px;
+  }
+}
+
+/* 手动断点覆盖：优先级高于 @media，用于设计系统断点预览 */
 html[data-breakpoint="desktop"] {
   --gallery-max-width: 1600px;
   --gallery-gap: 24px;
 }
 
-/* 断点版本：平板 */
 html[data-breakpoint="tablet"] {
   --gallery-max-width: 1024px;
   --gallery-gap: 16px;
 }
 
-/* 断点版本：移动 */
 html[data-breakpoint="mobile"] {
   --gallery-max-width: 100vw;
   --gallery-gap: 8px;

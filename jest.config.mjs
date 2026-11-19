@@ -2,15 +2,18 @@
  * @file Jest 配置
  * @description 隔离项目测试与 docs 下第三方参考源码，避免第三方测试污染门禁
  * @author YYC³
- * @version 1.0.0
+ * @version 1.2.0
  * @created 2026-11-19
- * @updated 2026-11-19
+ * @updated 2026-11-20
  */
 
 /** @type {import('jest').Config} */
 const config = {
   testEnvironment: "jsdom",
   passWithNoTests: true,
+  transform: {
+    "^.+\\.[tj]sx?$": ["ts-jest"],
+  },
   testPathIgnorePatterns: [
     "/node_modules/",
     "/.next/",

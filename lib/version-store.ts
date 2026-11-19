@@ -2,8 +2,9 @@
  * @file 多版本设计状态管理
  * @description 支持主题/断点/布局版本切换，持久化到 localStorage
  * @author YYC³
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2026-11-20
+ * @updated 2026-11-20
  */
 
 import { useSyncExternalStore } from "react";
@@ -18,6 +19,8 @@ export interface GalleryVersion {
   theme: GalleryTheme;
   layout: LayoutVersion;
   breakpoint: BreakpointVersion;
+  /** 是否为用户手动覆盖断点（true 时写入 data-breakpoint，否则由 CSS @media 自动响应） */
+  breakpointOverride: boolean;
   reducedMotion: boolean;
 }
 
@@ -124,6 +127,7 @@ function defaultVersion(): GalleryVersion {
     theme: "warm-art",
     layout: "split",
     breakpoint: "desktop",
+    breakpointOverride: false,
     reducedMotion: false,
   };
 }
@@ -151,6 +155,7 @@ function restoreVersion(): GalleryVersion {
       theme: theme ?? base.theme,
       layout,
       breakpoint,
+      breakpointOverride: Boolean(parsed.breakpointOverride),
       reducedMotion: Boolean(parsed.reducedMotion),
     };
   } catch {
@@ -207,7 +212,12 @@ export function setLayout(layout: LayoutVersion) {
 }
 
 export function setBreakpoint(breakpoint: BreakpointVersion) {
-  emit({ ...state, breakpoint });
+  emit({ ...state, breakpoint, breakpointOverride: true });
+}
+
+/** 恢复自动断点模式：清除手动覆盖，由 CSS @media 原生响应 */
+export function resetBreakpoint() {
+  emit({ ...state, breakpoint: "desktop", breakpointOverride: false });
 }
 
 export function setReducedMotion(reducedMotion: boolean) {
