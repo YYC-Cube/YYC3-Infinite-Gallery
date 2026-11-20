@@ -92,6 +92,18 @@ function detectLocale(): Locale {
 
 let currentLocale: Locale = detectLocale();
 
+/** 将当前语言同步到 documentElement.lang（修正 SSR 静态 lang 与检测语言不一致） */
+function syncDocumentLang() {
+  if (typeof document === "undefined") return;
+  document.documentElement.lang =
+    currentLocale === "zh"
+      ? "zh-CN"
+      : currentLocale === "ja"
+        ? "ja"
+        : "en";
+}
+syncDocumentLang();
+
 export function subscribeLocale(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -106,7 +118,11 @@ export function useLocale(): Locale {
 }
 
 export function setLocale(locale: Locale) {
-  if (currentLocale === locale) return;
+  if (currentLocale === locale) {
+    // 同语言也确保 DOM lang 同步（SSR 静态值可能与检测语言不一致）
+    syncDocumentLang();
+    return;
+  }
   currentLocale = locale;
   if (typeof window !== "undefined") {
     try {
@@ -114,9 +130,8 @@ export function setLocale(locale: Locale) {
     } catch {
       /* 忽略 */
     }
-    document.documentElement.lang =
-      locale === "zh" ? "zh-CN" : locale === "ja" ? "ja" : "en";
   }
+  syncDocumentLang();
   listeners.forEach((listener) => listener());
 }
 

@@ -45,6 +45,8 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "analyze": "ANALYZE=true next build",
     "benchmark": "node scripts/benchmark.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "audit": "pnpm audit",
     "update-deps": "pnpm update --latest --interactive"
   },
@@ -102,6 +104,7 @@
     "web-vitals": "^6.2.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",

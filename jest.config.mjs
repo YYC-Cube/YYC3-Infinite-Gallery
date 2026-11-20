@@ -18,6 +18,7 @@ const config = {
     "/node_modules/",
     "/.next/",
     "/out/",
+    "/e2e/",
     "/docs/YYC3-MusAI-开源组件库/",
   ],
   modulePathIgnorePatterns: [
