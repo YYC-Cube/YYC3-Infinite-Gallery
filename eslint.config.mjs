@@ -20,6 +20,7 @@ const config = [
 			'.next/**',
 			'node_modules/**',
 			'out/**',
+			'coverage/**',
 			'docs/**',
 			'next-env.d.ts',
 		],

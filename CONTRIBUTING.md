@@ -3,11 +3,11 @@ file: CONTRIBUTING.md
 title: 贡献指南
 description: YYC³ Infinite Gallery 贡献流程、开发规范、提交约定与协作指引
 author: YYC³ Team <admin@0379.email>
-version: v1.0.0
+version: v1.1.0
 created: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-20
 status: stable
-tags: [contributing, guide, workflow]
+tags: [contributing, guide, workflow, overview, architecture]
 category: documentation
 language: zh-CN
 audience: developers,contributors
@@ -23,6 +23,103 @@ complexity: basic
 > **_All things converge in cloud pivot; Deep stacks ignite a new era of intelligence_**
 
 ---
+
+## 🎯 项目概述
+
+YYC³ Infinite Gallery 是基于 **Next.js 16 + React Three Fiber + TypeScript** 构建的高性能 3D 无限滚动画廊系统，以「温润艺术风」为设计基调，融合自主媒体空间、多版本设计系统与 PWA 离线能力。
+
+### 核心定位
+
+| 维度 | 说明 |
+| ---- | ---- |
+| 产品形态 | 沉浸式 3D 作品展示 + 多实例媒体播放空间 |
+| 技术底座 | Next.js 16（静态导出）+ React 19 + Three.js + Zustand 风格外部 store |
+| 设计系统 | 7 套主题 × 3 断点 × 2 布局，CSS 变量驱动 |
+| 智能化 | 个性化推荐、AI 内容标注（本地降级）、i18n 三语、WebXR 能力探测 |
+| 质量体系 | typecheck / lint / 48 用例 / docs / security 五重门禁 + CI 自动 Pages 部署 |
+
+### 一句话架构
+
+> **一个 3D 画廊 Canvas + 一组领域 Store + 一层 PWA 外壳**：画廊负责视觉，Store 负责状态与持久化，PWA 负责离线与安装，三者通过 `app/page.tsx` 编排。
+
+---
+
+## 🗺️ 图标可视架构展示
+
+以下用图标 + ASCII 形式展示项目分层架构与数据流向，帮助贡献者快速建立全局认知。
+
+### 分层架构
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  🌐 入口层  app/layout.tsx · app/page.tsx                        │
+│  ├─ 📐 元数据/PWA meta · 字体 · 全局样式                          │
+│  └─ 🎼 编排：Provider → 画廊 → 媒体空间 → 浮层组件               │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+┌────────────────────────────▼─────────────────────────────────────┐
+│  🧩 组件层  components/                                          │
+│  ├─ 🎞️  InfiniteGallery ── R3F Canvas / 着色器 / 视图降级        │
+│  ├─ 🎧  media-space/ ────── SessionWindow / VideoEngine          │
+│  ├─ ⚙️   ConfigPanel ────── 背景/光效/字体配置                   │
+│  ├─ 🎭  VersionSwitcher ── 主题/断点/布局/动效切换               │
+│  ├─ 🌐  LocaleSwitcher ─── 中/英/日切换                          │
+│  ├─ 📱  MobileBottomNav ── 底部导航/安全区/手势                  │
+│  ├─ 🏷️  AI 标签浮层 ────── 焦点作品标签                          │
+│  ├─ 🥽  XREntry ────────── WebXR 沉浸式入口                      │
+│  └─ 🧩  widgets/ ───────── 时钟/日历/天气/笔记（拖拽缩放）       │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │ useSyncExternalStore
+┌────────────────────────────▼─────────────────────────────────────┐
+│  🧠 领域状态层  lib/                                             │
+│  ├─ 🎨  version-store ───── 主题/断点/布局/动效                  │
+│  ├─ 🎧  media-space/store ─ 音视频会话/队列/窗口帧               │
+│  ├─ ⚙️   config-store ───── 画廊配置 → DOM CSS 变量              │
+│  ├─ ⭐  favorites-store ─── 收藏（长按手势写入）                 │
+│  ├─ 💡  recommendation-store ─ 曝光/互动 → 亲和度排序            │
+│  ├─ 🌐  i18n ────────────── 字典/语言状态                        │
+│  ├─ 🏷️  annotation-store ── 标注服务接口 + 本地降级 + 缓存       │
+│  ├─ 🔄  media-sync ──────── 媒体元数据 outbox 同步               │
+│  ├─ 📊  performance-monitor ─ Web Vitals 采集                    │
+│  ├─ 🌉  host-bridge ─────── 宿主能力协商/网络代理/outbox         │
+│  └─ 🥽  webxr ───────────── XR 能力探测/会话抽象                 │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+┌────────────────────────────▼─────────────────────────────────────┐
+│  💾 持久化层                                                     │
+│  ├─ 📦  localStorage ───── 版本/配置/收藏/推荐/语言/标注缓存     │
+│  ├─ 🗄️  IndexedDB ──────── 本地上传媒体文件（media-db/asset-store）│
+│  └─ ☁️  宿主 outbox ────── 离线队列，联网后 flushOutbox 补传     │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+┌────────────────────────────▼─────────────────────────────────────┐
+│  🚀 交付层                                                       │
+│  ├─ ⚙️   CI ─────────────── typecheck → lint → test → docs → sec │
+│  ├─ 📤  Build ───────────── 静态导出 out/ + SW 清单生成          │
+│  └─ 🌍  Pages ───────────── configure-pages → deploy-pages       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 关键数据流
+
+```
+🖱️ 用户滚动/手势
+   │
+   ▼
+🎞️ InfiniteGallery onFocusImage ──► 💡 recommendation-store（曝光采集）
+   │                                        │
+   │                                        ▼ 挂载时一次性排序（防抖动）
+   │                                  🖼️ orderedImages
+   ▼
+🏷️ annotation-store（焦点标注）──────► UI 标签浮层
+
+📱 媒体上传 ──► 🗄️ IndexedDB ──► 🔄 media-sync ──► 🌉 host-bridge outbox
+                                                        │ 联网
+                                                        ▼
+                                                   ☁️ 宿主 API
+```
+
+> 图例：🎞️ 视觉 · 🧠 状态 · 💾 存储 · 🚀 交付 · 🌉 桥接 · 🏷️ 智能
 
 感谢你考虑为 YYC³ Infinite Gallery 贡献代码！
 

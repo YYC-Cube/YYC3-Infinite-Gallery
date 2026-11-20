@@ -32,5 +32,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# 测试覆盖率报告
+/coverage/
+
 # 文档不提交远程，仅本地保留
 /docs/
