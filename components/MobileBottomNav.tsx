@@ -57,8 +57,6 @@ export default function MobileBottomNav() {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  if (!isMobile) return null;
-
   const handleTabPress = useCallback((tab: MobileTab) => {
     setActiveTab(tab);
     if (tab === "media") {
@@ -79,6 +77,9 @@ export default function MobileBottomNav() {
     },
     [handleTabPress],
   );
+
+  // 所有 hooks 调用完毕后才允许条件返回，保证 hooks 调用顺序稳定
+  if (!isMobile) return null;
 
   return (
     <nav
@@ -110,7 +111,6 @@ export default function MobileBottomNav() {
                   : "text-white/40 hover:text-warm-primary hover:bg-white/5"
               }`}
               aria-label={t(`nav.${tab}`, locale)}
-              aria-pressed={isActive}
               aria-selected={isActive}
               aria-controls={`mobile-tab-${tab}`}
               id={`mobile-tab-${tab}`}

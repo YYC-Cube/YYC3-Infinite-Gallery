@@ -8,6 +8,17 @@
 
 export type XRMode = "immersive-vr" | "immersive-ar" | "inline";
 
+/** WebXR 系统最小接口（避免依赖 DOM 类型库版本） */
+interface XRSystemLike {
+  isSessionSupported(mode: XRMode): Promise<boolean>;
+  requestSession(
+    mode: XRMode,
+    options?: { optionalFeatures?: string[] },
+  ): Promise<unknown>;
+}
+
+type NavigatorWithXR = Navigator & { xr?: XRSystemLike };
+
 export interface XRCapabilities {
   supported: boolean;
   vr: boolean;
@@ -21,7 +32,7 @@ export async function detectXRCapabilities(): Promise<XRCapabilities> {
   if (typeof navigator === "undefined") {
     return { supported: false, vr: false, ar: false, inline: false };
   }
-  const xr = (navigator as Navigator & { xr?: any }).xr;
+  const xr = (navigator as NavigatorWithXR).xr;
   if (!xr || typeof xr.isSessionSupported !== "function") {
     return {
       supported: false,
@@ -63,7 +74,7 @@ export async function requestXRSession(
   mode: XRMode,
   onSession?: (session: unknown) => void,
 ): Promise<unknown | null> {
-  const xr = (navigator as Navigator & { xr?: any }).xr;
+  const xr = (navigator as NavigatorWithXR).xr;
   if (!xr?.requestSession) return null;
   try {
     const session = await xr.requestSession(mode, {

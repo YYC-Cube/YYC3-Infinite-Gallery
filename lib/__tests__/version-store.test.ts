@@ -6,6 +6,7 @@
  * @created 2026-11-20
  */
 
+import type { GalleryTheme } from "../version-store";
 import {
   setTheme,
   setLayout,
@@ -90,7 +91,7 @@ describe("version-store", () => {
   });
 
   test("getThemeDefinition 未知主题应回退到第一个定义", () => {
-    const def = getThemeDefinition("warm-art" as any);
+    const def = getThemeDefinition("unknown-theme" as GalleryTheme);
     expect(def.id).toBe("warm-art");
   });
 
@@ -107,8 +108,9 @@ describe("version-store", () => {
   });
 
   test("新增主题应提供完整色彩定义", () => {
-    ["cyberpunk", "ink-wash", "polar"].forEach((id) => {
-      const def = getThemeDefinition(id as any);
+    const newThemes: GalleryTheme[] = ["cyberpunk", "ink-wash", "polar"];
+    newThemes.forEach((id) => {
+      const def = getThemeDefinition(id);
       expect(def.colors["--background"]).toBeDefined();
       expect(def.colors["--foreground"]).toBeDefined();
       expect(def.colors["--warm-primary"]).toBeDefined();

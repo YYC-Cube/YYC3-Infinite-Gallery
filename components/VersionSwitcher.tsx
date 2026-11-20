@@ -11,6 +11,11 @@
 import { useCallback } from "react";
 import { LayoutDashboard, Smartphone, Monitor, Palette, ArrowLeftRight } from "lucide-react";
 
+import type {
+  GalleryTheme,
+  LayoutVersion,
+  BreakpointVersion,
+} from "@/lib/version-store";
 import {
   setBreakpoint,
   resetBreakpoint,
@@ -24,26 +29,17 @@ import {
 export default function VersionSwitcher() {
   const version = useVersion();
 
-  const handleThemeChange = useCallback(
-    (theme: string) => {
-      setTheme(theme as typeof version.theme);
-    },
-    [version.theme],
-  );
+  const handleThemeChange = useCallback((theme: GalleryTheme) => {
+    setTheme(theme);
+  }, []);
 
-  const handleLayoutChange = useCallback(
-    (layout: string) => {
-      setLayout(layout as typeof version.layout);
-    },
-    [version.layout],
-  );
+  const handleLayoutChange = useCallback((layout: LayoutVersion) => {
+    setLayout(layout);
+  }, []);
 
-  const handleBreakpointChange = useCallback(
-    (breakpoint: string) => {
-      setBreakpoint(breakpoint as typeof version.breakpoint);
-    },
-    [version.breakpoint],
-  );
+  const handleBreakpointChange = useCallback((bp: BreakpointVersion) => {
+    setBreakpoint(bp);
+  }, []);
 
   const handleToggleReducedMotion = useCallback(() => {
     setReducedMotion(!version.reducedMotion);
