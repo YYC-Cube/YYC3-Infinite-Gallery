@@ -10,6 +10,7 @@ import {
   annotate,
   clearAnnotations,
   getAnnotation,
+  getAllAnnotations,
   localHeuristicProvider,
   createRemoteProvider,
 } from "../annotation-store";
@@ -108,5 +109,22 @@ describe("annotation-store", () => {
     jest.resetModules();
     const restored = await import("../annotation-store");
     expect(restored.getAnnotation("anything")).toBeUndefined();
+  });
+
+  test("getAllAnnotations 应返回全部缓存快照", async () => {
+    await annotate("all-1.jpg", "/all-1.jpg", localHeuristicProvider);
+    const all = getAllAnnotations();
+    expect(all["all-1.jpg"]).toBeDefined();
+  });
+
+  test("localStorage 写入异常时标注仍应生成", async () => {
+    const originalSetItem = Storage.prototype.setItem;
+    jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    const result = await annotate("quota.jpg", "/quota.jpg", localHeuristicProvider);
+    expect(result.tags.length).toBeGreaterThan(0);
+    jest.restoreAllMocks();
+    Storage.prototype.setItem = originalSetItem;
   });
 });

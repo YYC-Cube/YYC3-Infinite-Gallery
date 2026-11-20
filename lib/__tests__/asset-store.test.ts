@@ -10,13 +10,15 @@
 // ---- 轻量 IndexedDB mock（覆盖 asset-store 使用的最小接口）----
 let mockStore: Record<string, { id: string; file: Blob; createdAt: number }> = {};
 let mockDBEnabled = true;
+let mockStoreExists = true;
+let mockCreateIndex = jest.fn();
 
 const mockIndexedDB = {
   open: jest.fn(() => {
     const request: any = {
       result: {
-        objectStoreNames: { contains: () => true },
-        createObjectStore: jest.fn(() => ({ createIndex: jest.fn() })),
+        objectStoreNames: { contains: () => mockStoreExists },
+        createObjectStore: jest.fn(() => ({ createIndex: mockCreateIndex })),
         transaction: (_name: string, _mode: string) => {
           const tx: any = {
             objectStore: () => ({
@@ -53,8 +55,13 @@ const mockIndexedDB = {
       onerror: null as any,
     };
     queueMicrotask(() => {
-      if (mockDBEnabled) request.onsuccess?.();
-      else {
+      if (mockDBEnabled) {
+        if (!mockStoreExists) {
+          request.onupgradeneeded?.();
+          mockStoreExists = true;
+        }
+        request.onsuccess?.();
+      } else {
         request.error = new Error("db unavailable");
         request.onerror?.(request.error);
       }
@@ -80,6 +87,8 @@ describe("asset-store", () => {
     window.localStorage.clear();
     mockStore = {};
     mockDBEnabled = true;
+    mockStoreExists = true;
+    mockCreateIndex = jest.fn();
     mockIndexedDB.open.mockClear();
   });
 
@@ -148,5 +157,37 @@ describe("asset-store", () => {
     expect(id).toMatch(/^bg-/);
     jest.restoreAllMocks();
     Storage.prototype.setItem = originalSetItem;
+  });
+
+  test("首次使用应触发 onupgradeneeded 创建 store 与索引", async () => {
+    mockStoreExists = false;
+    const file = new File(["img"], "bg.png", { type: "image/png" });
+    const id = await storeBackgroundAsset(file);
+    expect(id).toMatch(/^bg-/);
+    expect(mockCreateIndex).toHaveBeenCalledWith(
+      "createdAt",
+      "createdAt",
+      { unique: false },
+    );
+  });
+
+  test("IndexedDB 全局缺失时应降级到 localStorage", async () => {
+    const originalIDB = global.indexedDB;
+    // @ts-expect-error 模拟完全无 IndexedDB 环境
+    delete global.indexedDB;
+    const file = new File(["img"], "bg.png", { type: "image/png" });
+    const id = await storeBackgroundAsset(file);
+    expect(id).toMatch(/^bg-/);
+    expect(window.localStorage.getItem(`yyc3-bg-asset:${id}`)).toBeTruthy();
+    Object.defineProperty(global, "indexedDB", {
+      value: originalIDB,
+      configurable: true,
+    });
+  });
+
+  test("降级数据 blob 解析失败时应返回 null", async () => {
+    window.localStorage.setItem("yyc3-bg-asset:broken", "data:x");
+    global.fetch = jest.fn().mockRejectedValue(new Error("decode failed")) as any;
+    expect(await loadBackgroundAsset("broken")).toBeNull();
   });
 });

@@ -14,6 +14,8 @@ import {
   recordInteraction,
   setRecommendationEnabled,
   clearRecommendationData,
+  subscribeRecommendation,
+  useRecommendation,
 } from "../recommendation-store";
 
 describe("recommendation-store", () => {
@@ -66,5 +68,28 @@ describe("recommendation-store", () => {
     setRecommendationEnabled(false);
     recordExposure("y", 1000);
     expect(getRecommendationSnapshot().affinity["y"]).toBeUndefined();
+  });
+
+  test("行为变更应持久化到 localStorage", () => {
+    recordExposure("persist-key", 2000);
+    jest.runAllTimers();
+    const stored = JSON.parse(
+      window.localStorage.getItem("yyc3-recommendation-v1") ?? "{}",
+    );
+    expect(stored.affinity["persist-key"].exposureMs).toBe(2000);
+  });
+
+  test("subscribeRecommendation 可取消订阅", () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeRecommendation(listener);
+    recordInteraction("sub-key");
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    recordInteraction("sub-key2");
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  test("useRecommendation 应为可用 hook", () => {
+    expect(typeof useRecommendation).toBe("function");
   });
 });

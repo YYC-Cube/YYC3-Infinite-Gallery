@@ -32,7 +32,10 @@ import {
   setWidgetMinimized,
   setWidgetShape,
   setWidgetNotes,
+  updateWidget,
+  focusWidget,
   subscribeWidgets,
+  type WidgetShape,
 } from "../widget-store";
 import {
   GALLERY_IMAGES,
@@ -197,6 +200,52 @@ describe("widget-store", () => {
     expect(listener).toHaveBeenCalled();
     unsubscribe();
   });
+
+  test("focusWidget 应提升组件层级到最高", () => {
+    setWidgetEnabled("clock", true);
+    const before = getWidgetsSnapshot().items["widget-clock"].z;
+    focusWidget("widget-clock");
+    const after = getWidgetsSnapshot().items["widget-clock"].z;
+    expect(after).toBeGreaterThan(before);
+  });
+
+  test("对不存在的组件 id 操作应安全忽略", () => {
+    expect(() => updateWidget("nonexistent", { x: 1 })).not.toThrow();
+    expect(() => focusWidget("nonexistent")).not.toThrow();
+    expect(() => setWidgetMinimized("nonexistent", true)).not.toThrow();
+    expect(() => setWidgetShape("nonexistent", "circle")).not.toThrow();
+  });
+
+  test("非法 shape 应被 setWidgetShape 拒绝", () => {
+    setWidgetEnabled("clock", true);
+    const before = getWidgetsSnapshot().items["widget-clock"].shape;
+    setWidgetShape("widget-clock", "not-a-shape" as WidgetShape);
+    expect(getWidgetsSnapshot().items["widget-clock"].shape).toBe(before);
+  });
+
+  test("setWidgetMinimized 的非法 shape 应回退原 shape", () => {
+    setWidgetEnabled("clock", true);
+    const before = getWidgetsSnapshot().items["widget-clock"].shape;
+    setWidgetMinimized("widget-clock", true, "not-a-shape" as WidgetShape);
+    expect(getWidgetsSnapshot().items["widget-clock"].shape).toBe(before);
+    expect(getWidgetsSnapshot().items["widget-clock"].minimized).toBe(true);
+  });
+
+  test("setWidgetNotes 应截断超长笔记", () => {
+    setWidgetEnabled("notes", true);
+    setWidgetNotes("widget-notes", "x".repeat(3000));
+    expect(getWidgetsSnapshot().items["widget-notes"].notes.length).toBe(2000);
+  });
+
+  test("变更应触发持久化到 localStorage", () => {
+    jest.useFakeTimers();
+    setWidgetEnabled("weather", true);
+    jest.runAllTimers();
+    const stored = window.localStorage.getItem("yyc3-widget-space-v1");
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored!).items["widget-weather"].enabled).toBe(true);
+    jest.useRealTimers();
+  });
 });
 
 describe("media-store", () => {
@@ -216,5 +265,22 @@ describe("media-store", () => {
     const layout = { ...DEFAULT_LAYOUT, volume: 0.33 };
     savePlayerLayout(layout);
     expect(loadPlayerLayout().volume).toBe(0.33);
+  });
+
+  test("loadPlayerLayout 损坏数据应回退默认", () => {
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    window.localStorage.setItem("yyc3-gallery-media-layout", "bad json");
+    expect(loadPlayerLayout()).toEqual(DEFAULT_LAYOUT);
+    spy.mockRestore();
+  });
+
+  test("loadPlayerLayout 应规范化 volume 与 mode", () => {
+    window.localStorage.setItem(
+      "yyc3-gallery-media-layout",
+      JSON.stringify({ volume: 5, mode: "invalid" }),
+    );
+    const layout = loadPlayerLayout();
+    expect(layout.volume).toBe(1);
+    expect(layout.mode).toBe("collapsed");
   });
 });

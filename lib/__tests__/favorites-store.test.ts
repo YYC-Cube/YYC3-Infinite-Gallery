@@ -11,6 +11,7 @@ import {
   toggleFavorite,
   getFavoritesSnapshot,
   subscribeFavorites,
+  useFavorites,
   FAVORITES_STORAGE_KEY,
 } from "../favorites-store";
 
@@ -58,5 +59,9 @@ describe("favorites-store", () => {
     unsubscribe();
     toggleFavorite("track-4");
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  test("useFavorites 应为可用 hook", () => {
+    expect(typeof useFavorites).toBe("function");
   });
 });
