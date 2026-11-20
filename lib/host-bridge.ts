@@ -45,6 +45,11 @@ function emit(next: Partial<HostState>) {
   listeners.forEach((listener) => listener());
 }
 
+/** 有效端点：优先运行时配置（state.endpoint），环境变量仅作初始种子 */
+function getEndpoint(): string {
+  return state.endpoint || ENDPOINT;
+}
+
 export function subscribeHost(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -59,13 +64,14 @@ export function useHostState(): HostState {
 }
 
 export async function probeHost(): Promise<HostState> {
-  if (!ENDPOINT) {
+  const endpoint = getEndpoint();
+  if (!endpoint) {
     emit({ connection: "direct", capabilities: [] });
     return state;
   }
   emit({ connection: "checking" });
   try {
-    const response = await fetch(`${ENDPOINT}/v1/capabilities`, {
+    const response = await fetch(`${endpoint}/v1/capabilities`, {
       credentials: "include",
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(5000),
@@ -97,7 +103,8 @@ export async function hostFetch(
   input: string,
   init?: RequestInit,
 ): Promise<Response> {
-  if (!ENDPOINT || state.connection !== "online") {
+  const endpoint = getEndpoint();
+  if (!endpoint || state.connection !== "online") {
     return fetch(input, init);
   }
 
@@ -107,7 +114,7 @@ export async function hostFetch(
       : init?.body instanceof URLSearchParams
         ? init.body.toString()
         : undefined;
-  const response = await fetch(`${ENDPOINT}/v1/network/fetch`, {
+  const response = await fetch(`${endpoint}/v1/network/fetch`, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -156,10 +163,11 @@ function writeOutbox(items: OutboxItem[]) {
 }
 
 export async function hostStorageGet<T>(key: string): Promise<T | null> {
-  if (ENDPOINT && state.connection === "online") {
+  const endpoint = getEndpoint();
+  if (endpoint && state.connection === "online") {
     try {
       const response = await fetch(
-        `${ENDPOINT}/v1/storage/${encodeURIComponent(key)}`,
+        `${endpoint}/v1/storage/${encodeURIComponent(key)}`,
         {
           credentials: "include",
           headers: { Accept: "application/json" },
@@ -185,10 +193,11 @@ export async function hostStorageSet(
   key: string,
   value: unknown,
 ): Promise<void> {
-  if (ENDPOINT && state.connection === "online") {
+  const endpoint = getEndpoint();
+  if (endpoint && state.connection === "online") {
     try {
       const response = await fetch(
-        `${ENDPOINT}/v1/storage/${encodeURIComponent(key)}`,
+        `${endpoint}/v1/storage/${encodeURIComponent(key)}`,
         {
           method: "PUT",
           credentials: "include",
@@ -202,7 +211,7 @@ export async function hostStorageSet(
     }
   }
 
-  if (!ENDPOINT) return;
+  if (!endpoint) return;
   const outbox = readOutbox();
   outbox.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -214,14 +223,15 @@ export async function hostStorageSet(
 }
 
 export async function flushOutbox(): Promise<void> {
-  if (!ENDPOINT || state.connection !== "online") return;
+  const endpoint = getEndpoint();
+  if (!endpoint || state.connection !== "online") return;
   const pending = readOutbox();
   if (pending.length === 0) return;
   const remaining: OutboxItem[] = [];
   for (const item of pending) {
     try {
       const response = await fetch(
-        `${ENDPOINT}/v1/storage/${encodeURIComponent(item.key)}`,
+        `${endpoint}/v1/storage/${encodeURIComponent(item.key)}`,
         {
           method: "PUT",
           credentials: "include",
@@ -240,17 +250,23 @@ export async function flushOutbox(): Promise<void> {
   writeOutbox(remaining);
 }
 
-export function configureHostEndpoint(endpoint: string) {
-  if (!endpoint) return;
+export function configureHostEndpoint(endpoint: string, autoProbe = true) {
+  const normalized = endpoint.replace(/\/$/, "");
+  if (!normalized) {
+    // 允许清空运行时端点，回到环境变量种子或直连模式
+    state = { ...state, endpoint: "", connection: "direct" };
+    emit({});
+    return;
+  }
   state = {
     ...state,
-    endpoint: endpoint.replace(/\/$/, ""),
+    endpoint: normalized,
     connection: "checking",
   };
   emit({});
-  void probeHost();
+  if (autoProbe) void probeHost();
 }
 
 export function hostIsAvailable(): boolean {
-  return !ENDPOINT || state.connection === "online";
+  return !getEndpoint() || state.connection === "online";
 }

@@ -20,7 +20,8 @@ concurrency:
 
 env:
   PNPM_VERSION: 9.15.0
-  NODE_VERSION: 20
+  # 使用 Node 22 LTS，避免 GitHub Actions runner 对 Node 20 的弃用告警
+  NODE_VERSION: 22
 
 jobs:
   quality:

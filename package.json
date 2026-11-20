@@ -44,6 +44,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "analyze": "ANALYZE=true next build",
+    "benchmark": "node scripts/benchmark.mjs",
     "audit": "pnpm audit",
     "update-deps": "pnpm update --latest --interactive"
   },

@@ -106,10 +106,24 @@ export default function SessionWindow({
   const [gestureTip, setGestureTip] = useState("");
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
   const favorites = useFavorites();
+  const tipTimerRef = useRef<number | null>(null);
 
   const showGestureTip = useCallback((message: string) => {
+    if (tipTimerRef.current !== null) window.clearTimeout(tipTimerRef.current);
     setGestureTip(message);
-    window.setTimeout(() => setGestureTip(""), 1400);
+    tipTimerRef.current = window.setTimeout(() => {
+      setGestureTip("");
+      tipTimerRef.current = null;
+    }, 1400);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (tipTimerRef.current !== null) {
+        window.clearTimeout(tipTimerRef.current);
+        tipTimerRef.current = null;
+      }
+    };
   }, []);
 
   const gesture = useMediaGestures({
