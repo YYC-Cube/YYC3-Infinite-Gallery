@@ -1,19 +1,3 @@
----
-file: README.md
-title: YYC³ Infinite Gallery
-description: 基于 Next.js 与 Three.js 的高性能 3D 无限滚动画廊展示系统
-author: YYC³ Team <admin@0379.email>
-version: v2.0.0
-created: 2025-09-15
-updated: 2026-11-18
-status: stable
-tags: [gallery, threejs, nextjs, pwa]
-category: project
-language: zh-CN
-audience: developers,users
-complexity: intermediate
----
-
 # YYC³ Infinite Gallery
 
 > **_YYC³_**（YanYuCloudCube™ · 注册商标）
