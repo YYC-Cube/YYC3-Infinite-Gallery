@@ -52,4 +52,46 @@ describe("webxr", () => {
     const session = await requestXRSession("immersive-vr");
     expect(session).toBeNull();
   });
+
+  test("requestSession 成功应返回会话并回调", async () => {
+    const fakeSession = { id: "xr-session" };
+    const onSession = jest.fn();
+    Object.defineProperty(global, "navigator", {
+      value: {
+        xr: {
+          requestSession: jest.fn().mockResolvedValue(fakeSession),
+        },
+      },
+      configurable: true,
+    });
+    const session = await requestXRSession("immersive-ar", onSession);
+    expect(session).toBe(fakeSession);
+    expect(onSession).toHaveBeenCalledWith(fakeSession);
+  });
+
+  test("requestSession 拒绝时应返回 null", async () => {
+    Object.defineProperty(global, "navigator", {
+      value: {
+        xr: {
+          requestSession: jest.fn().mockRejectedValue(new Error("denied")),
+        },
+      },
+      configurable: true,
+    });
+    const session = await requestXRSession("immersive-vr");
+    expect(session).toBeNull();
+  });
+
+  test("isSessionSupported 部分拒绝时应标记为不支持", async () => {
+    Object.defineProperty(global, "navigator", {
+      value: {
+        xr: {
+          isSessionSupported: jest.fn().mockRejectedValue(new Error("no")),
+        },
+      },
+      configurable: true,
+    });
+    const caps = await detectXRCapabilities();
+    expect(caps.supported).toBe(false);
+  });
 });

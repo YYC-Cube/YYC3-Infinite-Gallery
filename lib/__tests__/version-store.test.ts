@@ -16,6 +16,7 @@ import {
   getVersionSnapshot,
   subscribeVersion,
   getThemeDefinition,
+  applyThemeToDOM,
   getBreakpointFromWidth,
   THEME_DEFINITIONS,
 } from "../version-store";
@@ -125,5 +126,56 @@ describe("version-store", () => {
     expect(getBreakpointFromWidth(1023)).toBe("tablet");
     expect(getBreakpointFromWidth(1024)).toBe("desktop");
     expect(getBreakpointFromWidth(1920)).toBe("desktop");
+  });
+
+  test("applyThemeToDOM 应写入主题 data 属性与 CSS 变量", () => {
+    applyThemeToDOM("cyberpunk");
+    expect(document.documentElement.dataset.theme).toBe("cyberpunk");
+    const def = getThemeDefinition("cyberpunk");
+    expect(
+      document.documentElement.style.getPropertyValue("--warm-primary"),
+    ).toBe(def.colors["--warm-primary"]);
+  });
+
+  test("模块加载应从 localStorage 恢复版本状态", async () => {
+    window.localStorage.setItem(
+      "yyc3-gallery-version-v1",
+      JSON.stringify({
+        version: 1,
+        theme: "polar",
+        layout: "unified",
+        breakpoint: "tablet",
+        breakpointOverride: true,
+        reducedMotion: true,
+      }),
+    );
+    jest.resetModules();
+    const restored = await import("../version-store");
+    const snap = restored.getVersionSnapshot();
+    expect(snap.theme).toBe("polar");
+    expect(snap.layout).toBe("unified");
+    expect(snap.breakpoint).toBe("tablet");
+    expect(snap.breakpointOverride).toBe(true);
+    expect(snap.reducedMotion).toBe(true);
+  });
+
+  test("非法存储数据应回退默认值", async () => {
+    window.localStorage.setItem("yyc3-gallery-version-v1", "not-json");
+    jest.resetModules();
+    const restored = await import("../version-store");
+    expect(restored.getVersionSnapshot().theme).toBe("warm-art");
+  });
+
+  test("部分字段缺失时应逐项回退默认", async () => {
+    window.localStorage.setItem(
+      "yyc3-gallery-version-v1",
+      JSON.stringify({ theme: "invalid-theme", layout: "bad", breakpoint: "xl" }),
+    );
+    jest.resetModules();
+    const restored = await import("../version-store");
+    const snap = restored.getVersionSnapshot();
+    expect(snap.theme).toBe("warm-art");
+    expect(snap.layout).toBe("split");
+    expect(snap.breakpoint).toBe("desktop");
   });
 });

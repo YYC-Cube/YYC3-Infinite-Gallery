@@ -53,4 +53,60 @@ describe("annotation-store", () => {
     expect(result.tags.length).toBeGreaterThan(0);
     global.fetch = globalFetch;
   });
+
+  test("远程服务成功时应返回远程标注", async () => {
+    const globalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        tags: ["肖像", "光影"],
+        description: "AI 描述",
+      }),
+    });
+    const provider = createRemoteProvider("/api/annotate");
+    const result = await provider.annotate("remote.jpg", "/remote.jpg");
+    expect(result.source).toBe("remote");
+    expect(result.tags).toEqual(["肖像", "光影"]);
+    expect(result.description).toBe("AI 描述");
+    global.fetch = globalFetch;
+  });
+
+  test("远程响应非法时应回退本地标注", async () => {
+    const globalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ invalid: true }),
+    });
+    const provider = createRemoteProvider("/api/annotate");
+    const result = await provider.annotate("bad.jpg", "/bad.jpg");
+    expect(result.source).toBe("local");
+    global.fetch = globalFetch;
+  });
+
+  test("模块加载时应从 localStorage 恢复缓存", async () => {
+    const cached = {
+      "cached-id": {
+        id: "cached-id",
+        tags: ["恢复标签"],
+        description: "从存储恢复",
+        source: "remote",
+        createdAt: 12345,
+      },
+    };
+    window.localStorage.setItem(
+      "yyc3-annotations-v1",
+      JSON.stringify(cached),
+    );
+    jest.resetModules();
+    const restored = await import("../annotation-store");
+    expect(restored.getAnnotation("cached-id")?.tags).toEqual(["恢复标签"]);
+    expect(restored.getAnnotation("cached-id")?.createdAt).toBe(12345);
+  });
+
+  test("损坏的缓存数据应被安全忽略", async () => {
+    window.localStorage.setItem("yyc3-annotations-v1", "not-json");
+    jest.resetModules();
+    const restored = await import("../annotation-store");
+    expect(restored.getAnnotation("anything")).toBeUndefined();
+  });
 });
