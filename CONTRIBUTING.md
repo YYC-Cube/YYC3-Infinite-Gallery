@@ -281,7 +281,7 @@ pnpm start
 
 ## ❓ 需要帮助？
 
-- 查看 [文档](./docs/README.md)
+- 查看 [项目文档](./README.md) 与 [实施文档目录](./03-YYC3-项目开发-实施阶段/001-YYC3-项目深度分析与后续优化建议.md)
 - 搜索 [现有 Issues](https://github.com/YYC-Cube/YYC3-Infinite-Gallery/issues)
 - 加入 [Discussions](https://github.com/YYC-Cube/YYC3-Infinite-Gallery/discussions)
 
