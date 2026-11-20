@@ -158,4 +158,72 @@ describe("host-bridge", () => {
     expect(getHostSnapshot()).toBeDefined();
     expect(typeof useHostState).toBe("function");
   });
+
+  test("在线模式 hostStorageGet 应从远端读取", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ version: "1", capabilities: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ remote: true }),
+      });
+    configureHostEndpoint("https://host.example", false);
+    await probeHost();
+    const result = await hostStorageGet("remote-key");
+    expect(result).toEqual({ remote: true });
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      "https://host.example/v1/storage/remote-key",
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
+  test("在线模式远端读取失败应回退本地", async () => {
+    window.localStorage.setItem("local-key", JSON.stringify({ local: true }));
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ version: "1", capabilities: [] }),
+      })
+      .mockRejectedValueOnce(new Error("remote down"));
+    configureHostEndpoint("https://host.example", false);
+    await probeHost();
+    const result = await hostStorageGet("local-key");
+    expect(result).toEqual({ local: true });
+  });
+
+  test("在线模式 hostStorageSet 应直接上报不入队", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ version: "1", capabilities: [] }),
+      })
+      .mockResolvedValueOnce({ ok: true });
+    configureHostEndpoint("https://host.example", false);
+    await probeHost();
+    await hostStorageSet("online-key", { v: 1 });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(window.localStorage.getItem("yyc3-host-outbox-v1")).toBeNull();
+  });
+
+  test("flushOutbox 在线模式应上报并清空队列", async () => {
+    configureHostEndpoint("https://host.example");
+    await hostStorageSet("pending-key", { v: 2 });
+    // probeHost 成功后会自动 flushOutbox，配置成功响应
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ version: "1", capabilities: [] }),
+    });
+    await probeHost();
+    await flushOutbox();
+    const outbox = JSON.parse(
+      window.localStorage.getItem("yyc3-host-outbox-v1") ?? "[]",
+    );
+    expect(outbox).toHaveLength(0);
+  });
 });

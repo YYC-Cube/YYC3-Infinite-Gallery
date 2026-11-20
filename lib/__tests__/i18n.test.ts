@@ -6,7 +6,15 @@
  * @created 2026-11-20
  */
 
-import { t, setLocale, getLocale, LOCALES, DICTIONARY } from "../i18n";
+import {
+  t,
+  setLocale,
+  getLocale,
+  subscribeLocale,
+  useLocale,
+  LOCALES,
+  DICTIONARY,
+} from "../i18n";
 
 describe("i18n", () => {
   test("应包含中/英/日三种语言", () => {
@@ -40,5 +48,58 @@ describe("i18n", () => {
     expect(window.localStorage.getItem("yyc3-locale-v1")).toBe("en");
     expect(document.documentElement.lang).toBe("en");
     setLocale("zh");
+  });
+
+  test("setLocale 同语言时不应通知监听器", () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeLocale(listener);
+    setLocale(getLocale()); // 相同语言
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  test("subscribeLocale 应在切换时通知并可取消", () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeLocale(listener);
+    setLocale("ja");
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    setLocale("en");
+    expect(listener).toHaveBeenCalledTimes(1);
+    setLocale("zh");
+  });
+
+  test("useLocale 应为可用 hook", () => {
+    expect(typeof useLocale).toBe("function");
+  });
+
+  test("t 应支持参数插值", () => {
+    DICTIONARY.zh["test.interpolation"] = "共 {count} 项 · {name}";
+    expect(t("test.interpolation", "zh", { count: "5", name: "作品" })).toBe(
+      "共 5 项 · 作品",
+    );
+    delete DICTIONARY.zh["test.interpolation"];
+  });
+
+  test("模块加载应根据 navigator.language 自动检测语言", async () => {
+    window.localStorage.clear();
+    Object.defineProperty(window.navigator, "language", {
+      value: "ja-JP",
+      configurable: true,
+    });
+    jest.resetModules();
+    const mod = await import("../i18n");
+    expect(mod.getLocale()).toBe("ja");
+  });
+
+  test("未知系统语言应回退中文", async () => {
+    window.localStorage.clear();
+    Object.defineProperty(window.navigator, "language", {
+      value: "fr-FR",
+      configurable: true,
+    });
+    jest.resetModules();
+    const mod = await import("../i18n");
+    expect(mod.getLocale()).toBe("zh");
   });
 });

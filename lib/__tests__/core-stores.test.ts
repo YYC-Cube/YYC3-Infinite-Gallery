@@ -6,12 +6,24 @@
  * @created 2026-11-20
  */
 
+const mockHostStorageGet = jest.fn();
+const mockLoadBackgroundAsset = jest.fn();
+jest.mock("../host-bridge", () => ({
+  hostStorageGet: (...args: unknown[]) => mockHostStorageGet(...args),
+  hostStorageSet: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock("../asset-store", () => ({
+  loadBackgroundAsset: (...args: unknown[]) => mockLoadBackgroundAsset(...args),
+}));
+
 import {
   DEFAULT_CONFIG,
   loadConfig,
   saveConfig,
   resetConfig,
   applyConfigToDOM,
+  loadConfigFromHost,
+  hydratePlayerBackground,
 } from "../config-store";
 import {
   WIDGET_CATALOG,
@@ -31,7 +43,11 @@ import {
 } from "../media-store";
 
 describe("config-store", () => {
-  beforeEach(() => window.localStorage.clear());
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockHostStorageGet.mockReset();
+    mockLoadBackgroundAsset.mockReset();
+  });
 
   test("loadConfig 无存储时返回默认配置", () => {
     expect(loadConfig()).toEqual(DEFAULT_CONFIG);
@@ -56,6 +72,75 @@ describe("config-store", () => {
     );
     // 变量可能由 config-store 内部映射，至少不应抛错
     expect(typeof value).toBe("string");
+  });
+
+  test("applyConfigToDOM 应根据背景图切换 body class", () => {
+    applyConfigToDOM({ ...DEFAULT_CONFIG, backgroundImage: "/bg.png" });
+    expect(document.body.classList.contains("custom-background-active")).toBe(
+      true,
+    );
+    applyConfigToDOM({ ...DEFAULT_CONFIG, backgroundImage: null });
+    expect(document.body.classList.contains("custom-background-active")).toBe(
+      false,
+    );
+  });
+
+  test("loadConfig 遇到损坏 JSON 应回退默认", () => {
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    window.localStorage.setItem("yyc3-gallery-config", "bad json");
+    expect(loadConfig()).toEqual(DEFAULT_CONFIG);
+    spy.mockRestore();
+  });
+
+  test("loadConfigFromHost 无远端数据应返回 null", async () => {
+    mockHostStorageGet.mockResolvedValue(null);
+    expect(await loadConfigFromHost()).toBeNull();
+  });
+
+  test("loadConfigFromHost 应合并远端配置", async () => {
+    mockHostStorageGet.mockResolvedValue({ fontSize: "lg" });
+    const result = await loadConfigFromHost();
+    expect(result?.fontSize).toBe("lg");
+    expect(result?.textOpacity).toBe(DEFAULT_CONFIG.textOpacity);
+  });
+
+  test("hydratePlayerBackground 已有图片时应直接返回", async () => {
+    const config = { ...DEFAULT_CONFIG, playerBackgroundImage: "/bg.png" };
+    expect(await hydratePlayerBackground(config)).toBe(config);
+    expect(mockLoadBackgroundAsset).not.toHaveBeenCalled();
+  });
+
+  test("hydratePlayerBackground 无 assetId 时应直接返回", async () => {
+    const config = { ...DEFAULT_CONFIG, playerBackgroundImage: null };
+    expect(await hydratePlayerBackground(config)).toBe(config);
+  });
+
+  test("hydratePlayerBackground 应加载资源并生成 objectURL", async () => {
+    const blob = new Blob(["img"]);
+    mockLoadBackgroundAsset.mockResolvedValue(blob);
+    const original = URL.createObjectURL;
+    (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL =
+      () => "blob:mock";
+    const config = {
+      ...DEFAULT_CONFIG,
+      playerBackgroundImage: null,
+      playerBackgroundAssetId: "asset-1",
+    };
+    const result = await hydratePlayerBackground(config);
+    expect(mockLoadBackgroundAsset).toHaveBeenCalledWith("asset-1");
+    expect(result.playerBackgroundImage).toBe("blob:mock");
+    (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL =
+      original;
+  });
+
+  test("hydratePlayerBackground 资源加载失败应保持原配置", async () => {
+    mockLoadBackgroundAsset.mockResolvedValue(null);
+    const config = {
+      ...DEFAULT_CONFIG,
+      playerBackgroundImage: null,
+      playerBackgroundAssetId: "missing",
+    };
+    expect(await hydratePlayerBackground(config)).toBe(config);
   });
 });
 
