@@ -77,6 +77,23 @@ describe("config-store", () => {
     expect(typeof value).toBe("string");
   });
 
+  test("applyConfigToDOM 应映射全局光效与边线色度变量", () => {
+    applyConfigToDOM({
+      ...DEFAULT_CONFIG,
+      glowRadius: 80,
+      ambientCenterColor: "rgba(1, 2, 3, 0.1)",
+      borderChroma: "10 20 30",
+      glassBlur: 32,
+    });
+    const root = document.documentElement;
+    expect(root.style.getPropertyValue("--glow-radius")).toBe("80%");
+    expect(root.style.getPropertyValue("--ambient-center")).toBe(
+      "rgba(1, 2, 3, 0.1)",
+    );
+    expect(root.style.getPropertyValue("--border-chroma")).toBe("10 20 30");
+    expect(root.style.getPropertyValue("--glass-blur")).toBe("32px");
+  });
+
   test("applyConfigToDOM 应根据背景图切换 body class", () => {
     applyConfigToDOM({ ...DEFAULT_CONFIG, backgroundImage: "/bg.png" });
     expect(document.body.classList.contains("custom-background-active")).toBe(

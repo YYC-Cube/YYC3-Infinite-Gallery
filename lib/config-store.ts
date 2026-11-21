@@ -23,10 +23,16 @@ export interface GalleryConfig {
 
   /* 视觉风格 */
   glowIntensity: number;
+  glowRadius: number;
   ambientTopColor: string;
   ambientLeftColor: string;
   ambientRightColor: string;
+  ambientCenterColor: string;
   warmPrimaryColor: string;
+  /** 容器边线色度（RGB 三通道，0-255，空格分隔），统一驱动所有 border-warm/* */
+  borderChroma: string;
+  /** 全局玻璃模糊强度（px） */
+  glassBlur: number;
 
   /* 排版设置 */
   fontSize: string;
@@ -63,10 +69,14 @@ export const DEFAULT_CONFIG: GalleryConfig = {
   playerBackgroundBlur: 0,
 
   glowIntensity: 1,
+  glowRadius: 60,
   ambientTopColor: "rgba(212, 165, 116, 0.08)",
   ambientLeftColor: "rgba(255, 200, 150, 0.06)",
   ambientRightColor: "rgba(255, 180, 130, 0.05)",
+  ambientCenterColor: "rgba(232, 201, 160, 0.03)",
   warmPrimaryColor: "#d4a574",
+  borderChroma: "212 165 116",
+  glassBlur: 20,
 
   fontSize: "base",
   fontWeight: "light",
@@ -154,10 +164,20 @@ export function applyConfigToDOM(config: GalleryConfig): void {
   const root = document.documentElement;
 
   root.style.setProperty("--glow-intensity", String(config.glowIntensity));
+  root.style.setProperty("--glow-radius", `${config.glowRadius}%`);
+  // 同时写入两套变量名：--ambient-* 供 body::before 光效使用，
+  // --ambient-*-color 为历史兼容别名，修正此前光晕色配置不生效的缺陷。
+  root.style.setProperty("--ambient-top", config.ambientTopColor);
+  root.style.setProperty("--ambient-left", config.ambientLeftColor);
+  root.style.setProperty("--ambient-right", config.ambientRightColor);
+  root.style.setProperty("--ambient-center", config.ambientCenterColor);
   root.style.setProperty("--ambient-top-color", config.ambientTopColor);
   root.style.setProperty("--ambient-left-color", config.ambientLeftColor);
   root.style.setProperty("--ambient-right-color", config.ambientRightColor);
+  root.style.setProperty("--ambient-center-color", config.ambientCenterColor);
   root.style.setProperty("--warm-primary", config.warmPrimaryColor);
+  root.style.setProperty("--border-chroma", config.borderChroma);
+  root.style.setProperty("--glass-blur", `${config.glassBlur}px`);
 
   root.style.setProperty("--reveal-duration", `${config.revealDuration}s`);
   root.style.setProperty("--reveal-delay", `${config.revealDelay}s`);

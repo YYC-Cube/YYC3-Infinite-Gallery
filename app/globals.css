@@ -34,12 +34,19 @@
 
   /* 光效强度 */
   --glow-intensity: 1;
+  --glow-radius: 60%;
   --blur-amount: 40px;
+
+  /* 全局边线色度与玻璃模糊（由 Design Studio 统一驱动） */
+  --border-chroma: 212 165 116;
+  --glass-blur: 20px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* 统一边线色：所有 border-warm/<alpha> 均基于该可编辑 RGB 通道 */
+  --color-warm: rgb(var(--border-chroma) / <alpha-value>);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-cormorant);
@@ -69,7 +76,7 @@ body::before {
   inset: 0;
   background:
     radial-gradient(
-      ellipse 80% 50% at 50% -20%,
+      ellipse 80% var(--glow-radius) at 50% -20%,
       var(--ambient-top),
       transparent
     ),
@@ -236,8 +243,8 @@ body::before {
 /* 毛玻璃效果 - 暖色调 */
 .glass-effect {
   background: rgba(10, 9, 8, 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid rgba(212, 165, 116, 0.15);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.3),

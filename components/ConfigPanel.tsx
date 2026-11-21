@@ -357,6 +357,16 @@ export default function ConfigPanel({
                 onChange={(v) => updateConfig({ glowIntensity: v })}
               />
 
+              <SliderControl
+                label="光效扩散范围"
+                value={config.glowRadius}
+                min={20}
+                max={100}
+                step={5}
+                unit="%"
+                onChange={(v) => updateConfig({ glowRadius: v })}
+              />
+
               <ColorPickerControl
                 label="顶部光晕色"
                 value={config.ambientTopColor}
@@ -370,9 +380,36 @@ export default function ConfigPanel({
               />
 
               <ColorPickerControl
+                label="右侧光晕色"
+                value={config.ambientRightColor}
+                onChange={(v) => updateConfig({ ambientRightColor: v })}
+              />
+
+              <ColorPickerControl
+                label="中心光晕色"
+                value={config.ambientCenterColor}
+                onChange={(v) => updateConfig({ ambientCenterColor: v })}
+              />
+
+              <ColorPickerControl
                 label="主色调"
                 value={config.warmPrimaryColor}
                 onChange={(v) => updateConfig({ warmPrimaryColor: v })}
+              />
+
+              <BorderChromaControl
+                value={config.borderChroma}
+                onChange={(v) => updateConfig({ borderChroma: v })}
+              />
+
+              <SliderControl
+                label="容器磨砂模糊"
+                value={config.glassBlur}
+                min={0}
+                max={40}
+                step={2}
+                unit="px"
+                onChange={(v) => updateConfig({ glassBlur: v })}
               />
 
               <ToggleControl
@@ -647,6 +684,45 @@ function ColorPickerControl({
         <span className="text-xs font-mono text-white/30 max-w-[120px] truncate">
           {value.length > 20 ? value.slice(0, 18) + "..." : value}
         </span>
+      </div>
+    </div>
+  );
+}
+
+/* 子组件：容器边线色度（hex ↔ "r g b" 互转，统一驱动所有 border-warm/*） */
+function BorderChromaControl({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const toHex = (channels: string) => {
+    const parts = channels.trim().split(/\s+/).map(Number);
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) {
+      return "#d4a574";
+    }
+    return `#${parts.map((n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0")).join("")}`;
+  };
+  const fromHex = (hex: string) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `${r} ${g} ${b}`;
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-xs text-white/50">容器边线色度</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={toHex(value)}
+          onChange={(e) => onChange(fromHex(e.target.value))}
+          className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"
+          aria-label="容器边线色度"
+        />
+        <span className="text-xs font-mono text-white/30">{value}</span>
       </div>
     </div>
   );

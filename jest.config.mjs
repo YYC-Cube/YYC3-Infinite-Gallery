@@ -19,12 +19,10 @@ const config = {
     "/.next/",
     "/out/",
     "/e2e/",
-    "/docs/YYC3-MusAI-开源组件库/",
   ],
   modulePathIgnorePatterns: [
     "<rootDir>/.next/",
     "<rootDir>/out/",
-    "<rootDir>/docs/YYC3-MusAI-开源组件库/",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",

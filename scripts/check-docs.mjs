@@ -18,7 +18,6 @@ const SKIP_DIRS = [
   join(ROOT, "node_modules"),
   join(ROOT, ".next"),
   join(ROOT, "out"),
-  join(ROOT, "docs/YYC3-MusAI-开源组件库"),
 ];
 const SLOGAN_LINES = [
   "> **_YYC³_**（YanYuCloudCube™ · 注册商标）",
