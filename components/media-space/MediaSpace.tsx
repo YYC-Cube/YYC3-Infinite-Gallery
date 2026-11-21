@@ -119,7 +119,7 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
           title: item.file.name.replace(/\.[^.]+$/, ""),
           artist: "本地上传",
           album: isVideo ? "我的影像" : "我的收藏",
-          cover: "/artist-4:3/Music-1990.jpg",
+          cover: "/artist-4x3/Music-1990.jpg",
           src,
           kind: isVideo ? "video" : "audio",
           isLocal: true,

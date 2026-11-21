@@ -65,10 +65,10 @@ const LANDSCAPE_YEARS = [
 
 export const PORTRAIT_IMAGES: string[] = Array.from(
   { length: 10 },
-  (_, index) => `/artist-3:4/${index}.webp`,
+  (_, index) => `/artist-3x4/${index}.webp`,
 );
 export const LANDSCAPE_IMAGES: string[] = LANDSCAPE_YEARS.map(
-  (year) => `/artist-4:3/Music-${year}.jpg`,
+  (year) => `/artist-4x3/Music-${year}.jpg`,
 );
 /** 画廊完整图源：3:4 + 4:3 */
 export const GALLERY_IMAGES: string[] = [
@@ -99,19 +99,19 @@ const MP3_FILES = [
 
 interface VideoSource {
   year: number;
-  dir: "mv-3:4" | "mv-4:3";
+  dir: "mv-3x4" | "mv-4x3";
   cover: string;
 }
 
 const VIDEO_FILES: VideoSource[] = [
-  { year: 1990, dir: "mv-3:4", cover: "/artist-4:3/Music-1990.jpg" },
-  { year: 1991, dir: "mv-3:4", cover: "/artist-3:4/0.webp" },
-  { year: 1992, dir: "mv-3:4", cover: "/artist-4:3/Music-1992.jpg" },
-  { year: 1993, dir: "mv-3:4", cover: "/artist-3:4/1.webp" },
-  { year: 1995, dir: "mv-3:4", cover: "/artist-4:3/Music-1995.jpg" },
-  { year: 1989, dir: "mv-4:3", cover: "/artist-4:3/Music-1989.jpg" },
-  { year: 1994, dir: "mv-4:3", cover: "/artist-3:4/2.webp" },
-  { year: 1996, dir: "mv-4:3", cover: "/artist-4:3/Music-1995.jpg" },
+  { year: 1990, dir: "mv-3x4", cover: "/artist-4x3/Music-1990.jpg" },
+  { year: 1991, dir: "mv-3x4", cover: "/artist-3x4/0.webp" },
+  { year: 1992, dir: "mv-3x4", cover: "/artist-4x3/Music-1992.jpg" },
+  { year: 1993, dir: "mv-3x4", cover: "/artist-3x4/1.webp" },
+  { year: 1995, dir: "mv-3x4", cover: "/artist-4x3/Music-1995.jpg" },
+  { year: 1989, dir: "mv-4x3", cover: "/artist-4x3/Music-1989.jpg" },
+  { year: 1994, dir: "mv-4x3", cover: "/artist-3x4/2.webp" },
+  { year: 1996, dir: "mv-4x3", cover: "/artist-4x3/Music-1995.jpg" },
 ];
 
 function coverAt(index: number): string {
@@ -132,7 +132,7 @@ export const BUILTIN_TRACKS: MediaTrack[] = [
     id: `builtin-video-${index}`,
     title: `Music ${video.year}`,
     artist: "YYC³ 影像",
-    album: video.dir === "mv-3:4" ? "影像典藏 · 3:4" : "影像典藏 · 4:3",
+    album: video.dir === "mv-3x4" ? "影像典藏 · 3:4" : "影像典藏 · 4:3",
     cover: video.cover,
     src: `/${video.dir}/Music-${video.year}.mp4`,
     kind: "video" as const,

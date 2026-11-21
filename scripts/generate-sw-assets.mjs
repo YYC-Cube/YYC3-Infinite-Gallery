@@ -34,7 +34,7 @@ const PUBLIC_FILES = [
   "D-icons/icon-192.png",
   "D-icons/icon-512.png",
 ];
-const GALLERY_DIRS = ["artist-3:4", "artist-4:3"];
+const GALLERY_DIRS = ["artist-3x4", "artist-4x3"];
 
 function collect(dir) {
   if (!existsSync(dir)) return [];
