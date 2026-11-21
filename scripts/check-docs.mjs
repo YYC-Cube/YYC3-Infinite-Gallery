@@ -73,13 +73,12 @@ function parseFrontMatter(content) {
   return fields;
 }
 
-// 与 .gitignore 保持一致：docs/ 仅本地保留、不进仓库，CI 上不存在，
-// 因此校验时必须排除，否则本地通过而 CI 因链接指向 docs/ 失败。
+// docs/ 仅本地保留、不进仓库：存在时纳入校验，CI 上不存在则自然跳过。
+// 不再主动排除，避免本地文档门禁空转。
 const IGNORED_DIRS = [
   join(ROOT, "node_modules"),
   join(ROOT, ".next"),
   join(ROOT, "out"),
-  join(ROOT, "docs"),
 ];
 const allDocs = collectMarkdown(ROOT).filter(
   (f) => !IGNORED_DIRS.some((dir) => f.startsWith(`${dir}/`)),

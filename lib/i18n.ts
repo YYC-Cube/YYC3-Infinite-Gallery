@@ -93,7 +93,7 @@ function detectLocale(): Locale {
 let currentLocale: Locale = detectLocale();
 
 /** 将当前语言同步到 documentElement.lang（修正 SSR 静态 lang 与检测语言不一致） */
-function syncDocumentLang() {
+export function syncDocumentLang() {
   if (typeof document === "undefined") return;
   document.documentElement.lang =
     currentLocale === "zh"
@@ -102,7 +102,6 @@ function syncDocumentLang() {
         ? "ja"
         : "en";
 }
-syncDocumentLang();
 
 export function subscribeLocale(listener: () => void): () => void {
   listeners.add(listener);
@@ -113,8 +112,13 @@ export function getLocale(): Locale {
   return currentLocale;
 }
 
+/** 服务端与首次水合固定使用 zh，避免已保存语言造成 hydration 不一致 */
+function getServerLocale(): Locale {
+  return "zh";
+}
+
 export function useLocale(): Locale {
-  return useSyncExternalStore(subscribeLocale, getLocale, getLocale);
+  return useSyncExternalStore(subscribeLocale, getLocale, getServerLocale);
 }
 
 export function setLocale(locale: Locale) {

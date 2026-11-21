@@ -258,9 +258,22 @@ function restoreFromStorage(): MediaSpaceState {
 let state: MediaSpaceState = restoreFromStorage();
 let persistTimer: number | null = null;
 
-function schedulePersist() {
+/** 服务端与首次水合固定返回默认媒体空间 */
+const SERVER_MEDIA_SPACE = defaultState();
+
+interface PersistOptions {
+  /** 延迟毫秒数，默认 900ms */
+  delay?: number;
+  /** 是否重置已排队的持久化任务，默认 true */
+  reset?: boolean;
+}
+
+function schedulePersist({ delay = 900, reset = true }: PersistOptions = {}) {
   if (typeof window === "undefined") return;
-  if (persistTimer) window.clearTimeout(persistTimer);
+  if (persistTimer) {
+    if (!reset) return;
+    window.clearTimeout(persistTimer);
+  }
   persistTimer = window.setTimeout(() => {
     try {
       const serializable: MediaSpaceState = {
@@ -282,13 +295,13 @@ function schedulePersist() {
       /* 存储不可用时保持会话内存状态 */
     }
     persistTimer = null;
-  }, 900);
+  }, delay);
 }
 
-function emit(next: MediaSpaceState) {
+function emit(next: MediaSpaceState, persist?: PersistOptions) {
   state = next;
   listeners.forEach((listener) => listener());
-  schedulePersist();
+  schedulePersist(persist);
 }
 
 export function subscribeMediaSpace(listener: () => void): () => void {
@@ -304,7 +317,7 @@ export function useMediaSpace(): MediaSpaceState {
   return useSyncExternalStore(
     subscribeMediaSpace,
     getMediaSpaceSnapshot,
-    getMediaSpaceSnapshot,
+    () => SERVER_MEDIA_SPACE,
   );
 }
 
@@ -322,17 +335,21 @@ function patchSession(
   patch:
     | Partial<MediaSessionState>
     | ((session: MediaSessionState) => Partial<MediaSessionState>),
+  persist?: PersistOptions,
 ) {
   const session = state.sessions[id];
   if (!session) return;
   const nextPatch = typeof patch === "function" ? patch(session) : patch;
-  emit({
-    ...state,
-    sessions: {
-      ...state.sessions,
-      [id]: { ...session, ...nextPatch },
+  emit(
+    {
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [id]: { ...session, ...nextPatch },
+      },
     },
-  });
+    persist,
+  );
 }
 
 export function setSpaceOpen(isOpen: boolean) {
@@ -341,6 +358,17 @@ export function setSpaceOpen(isOpen: boolean) {
 
 export function setSpaceMode(mode: MediaSpaceMode) {
   const next: MediaSpaceState = { ...state, mode, isOpen: true };
+  if (mode === "split") next.sessions = arrangeSplitFrames(next);
+  emit(next);
+}
+
+/**
+ * 由设计系统同步布局模式：不强制打开媒体空间，模式相同时不产生写入。
+ * 供 ThemeVersionProvider 与设置面板使用，保证布局只有一个事实源。
+ */
+export function syncSpaceMode(mode: MediaSpaceMode) {
+  if (state.mode === mode) return;
+  const next: MediaSpaceState = { ...state, mode };
   if (mode === "split") next.sessions = arrangeSplitFrames(next);
   emit(next);
 }
@@ -439,12 +467,17 @@ export function setSessionTime(
   currentTime: number,
   duration?: number,
 ) {
-  patchSession(id, {
-    currentTime: Number.isFinite(currentTime) ? Math.max(0, currentTime) : 0,
-    ...(Number.isFinite(duration)
-      ? { duration: Math.max(0, duration ?? 0) }
-      : {}),
-  });
+  // 播放进度是高频事件：仅更新界面状态，持久化延后到 10s 且不打断已有写入计划
+  patchSession(
+    id,
+    {
+      currentTime: Number.isFinite(currentTime) ? Math.max(0, currentTime) : 0,
+      ...(Number.isFinite(duration)
+        ? { duration: Math.max(0, duration ?? 0) }
+        : {}),
+    },
+    { delay: 10_000, reset: false },
+  );
 }
 
 export function setSessionDuration(id: string, duration: number) {
@@ -594,7 +627,9 @@ export function addVideoSession(): string | null {
     VIDEO_TRACKS[count % VIDEO_TRACKS.length];
   if (!track) return null;
 
-  const id = `video-${Date.now().toString(36)}`;
+  const id = `video-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 6)}`;
   const baseFrame = state.sessions[VIDEO_SESSION_ID]?.frame ?? {
     x: 404,
     y: 124,

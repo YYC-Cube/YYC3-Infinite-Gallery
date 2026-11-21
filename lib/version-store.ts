@@ -49,6 +49,7 @@ export const THEME_DEFINITIONS: ThemeDefinition[] = [
       "--warm-primary": "#d4a574",
       "--warm-secondary": "#c9956c",
       "--warm-accent": "#e8c9a0",
+      "--border-chroma": "212 165 116",
       "--ambient-top": "rgba(212, 165, 116, 0.08)",
       "--ambient-left": "rgba(255, 200, 150, 0.06)",
       "--ambient-right": "rgba(255, 180, 130, 0.05)",
@@ -70,6 +71,7 @@ export const THEME_DEFINITIONS: ThemeDefinition[] = [
       "--warm-primary": "#8b9dc3",
       "--warm-secondary": "#7a8bb0",
       "--warm-accent": "#c0c9e0",
+      "--border-chroma": "139 157 195",
       "--ambient-top": "rgba(139, 157, 195, 0.06)",
       "--ambient-left": "rgba(120, 140, 180, 0.05)",
       "--ambient-right": "rgba(100, 130, 170, 0.04)",
@@ -91,6 +93,7 @@ export const THEME_DEFINITIONS: ThemeDefinition[] = [
       "--warm-primary": "#34d399",
       "--warm-secondary": "#22c55e",
       "--warm-accent": "#86efac",
+      "--border-chroma": "52 211 153",
       "--ambient-top": "rgba(52, 211, 153, 0.08)",
       "--ambient-left": "rgba(34, 197, 94, 0.06)",
       "--ambient-right": "rgba(16, 185, 129, 0.05)",
@@ -112,6 +115,7 @@ export const THEME_DEFINITIONS: ThemeDefinition[] = [
       "--warm-primary": "#64748b",
       "--warm-secondary": "#475569",
       "--warm-accent": "#94a3b8",
+      "--border-chroma": "100 116 139",
       "--ambient-top": "rgba(100, 116, 139, 0.04)",
       "--ambient-left": "rgba(71, 85, 105, 0.03)",
       "--ambient-right": "rgba(71, 85, 105, 0.02)",
@@ -133,6 +137,7 @@ export const THEME_DEFINITIONS: ThemeDefinition[] = [
       "--warm-primary": "#d946ef",
       "--warm-secondary": "#a855f7",
       "--warm-accent": "#22d3ee",
+      "--border-chroma": "217 70 239",
       "--ambient-top": "rgba(217, 70, 239, 0.10)",
       "--ambient-left": "rgba(168, 85, 247, 0.08)",
       "--ambient-right": "rgba(34, 211, 238, 0.07)",
@@ -154,6 +159,7 @@ export const THEME_DEFINITIONS: ThemeDefinition[] = [
       "--warm-primary": "#4a453d",
       "--warm-secondary": "#6b6459",
       "--warm-accent": "#8c8476",
+      "--border-chroma": "74 69 61",
       "--ambient-top": "rgba(74, 69, 61, 0.05)",
       "--ambient-left": "rgba(107, 100, 89, 0.04)",
       "--ambient-right": "rgba(140, 132, 118, 0.03)",
@@ -175,6 +181,7 @@ export const THEME_DEFINITIONS: ThemeDefinition[] = [
       "--warm-primary": "#0ea5c4",
       "--warm-secondary": "#0891b2",
       "--warm-accent": "#67e8f9",
+      "--border-chroma": "14 165 196",
       "--ambient-top": "rgba(14, 165, 196, 0.06)",
       "--ambient-left": "rgba(8, 145, 178, 0.05)",
       "--ambient-right": "rgba(103, 232, 249, 0.04)",
@@ -236,6 +243,9 @@ function restoreVersion(): GalleryVersion {
 let state: GalleryVersion = restoreVersion();
 let persistTimer: number | null = null;
 
+/** 服务端与首次水合固定返回默认版本，客户端状态在挂载后接管 */
+const SERVER_VERSION = defaultVersion();
+
 function schedulePersist() {
   if (typeof window === "undefined") return;
   if (persistTimer) window.clearTimeout(persistTimer);
@@ -269,7 +279,7 @@ export function useVersion(): GalleryVersion {
   return useSyncExternalStore(
     subscribeVersion,
     getVersionSnapshot,
-    getVersionSnapshot,
+    () => SERVER_VERSION,
   );
 }
 
@@ -300,13 +310,30 @@ export function getThemeDefinition(theme: GalleryTheme): ThemeDefinition {
   );
 }
 
+const THEME_STYLE_ID = "yyc3-theme-vars";
+
+/**
+ * 主题变量写入独立样式表而非内联样式：
+ * Design Studio 的内联变量优先级更高，移除内联后主题样式自然重新生效。
+ */
 export function applyThemeToDOM(theme: GalleryTheme): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   const definition = getThemeDefinition(theme);
-  Object.entries(definition.colors).forEach(([key, value]) => {
-    root.style.setProperty(key, value);
-  });
+
+  let styleElement = document.getElementById(
+    THEME_STYLE_ID,
+  ) as HTMLStyleElement | null;
+  if (!styleElement) {
+    styleElement = document.createElement("style");
+    styleElement.id = THEME_STYLE_ID;
+    document.head.appendChild(styleElement);
+  }
+  const declarations = Object.entries(definition.colors)
+    .map(([key, value]) => `  ${key}: ${value};`)
+    .join("\n");
+  styleElement.textContent = `:root {\n${declarations}\n}`;
+
   root.dataset.theme = theme;
 }
 

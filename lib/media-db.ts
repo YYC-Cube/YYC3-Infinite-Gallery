@@ -37,7 +37,8 @@ function openDatabase(): Promise<IDBDatabase> {
 	});
 }
 
-export async function storeMediaFile(id: string, file: File): Promise<void> {
+/** 写入本地媒体文件；返回 false 表示配额不足或 IndexedDB 不可用 */
+export async function storeMediaFile(id: string, file: File): Promise<boolean> {
 	try {
 		const db = await openDatabase();
 		await new Promise<void>((resolve, reject) => {
@@ -51,8 +52,10 @@ export async function storeMediaFile(id: string, file: File): Promise<void> {
 			transaction.onerror = () => reject(transaction.error);
 		});
 		db.close();
+		return true;
 	} catch (error) {
 		console.warn('[YYC³ Media] 上传文件持久化失败', error);
+		return false;
 	}
 }
 

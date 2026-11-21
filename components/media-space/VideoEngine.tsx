@@ -222,18 +222,31 @@ const VideoEngine = forwardRef<VideoEngineHandle, VideoEngineProps>(
           );
         },
         async enterFullscreen() {
-          const container = containerRef.current;
-          if (!container) return;
-          if (container.requestFullscreen) {
-            await container.requestFullscreen();
-          } else if (playerRef.current) {
-            playerRef.current.fullscreenWeb = true;
+          try {
+            const container = containerRef.current;
+            if (!container) return;
+            if (container.requestFullscreen) {
+              await container.requestFullscreen();
+            } else if (playerRef.current) {
+              playerRef.current.fullscreenWeb = true;
+            } else {
+              setError("当前浏览器不支持全屏播放");
+            }
+          } catch {
+            setError("当前浏览器不允许全屏播放");
           }
         },
         async pictureInPicture() {
-          const video = videoRef.current;
-          if (!video || !document.pictureInPictureEnabled) return;
-          await video.requestPictureInPicture();
+          try {
+            const video = videoRef.current;
+            if (!video || !document.pictureInPictureEnabled) {
+              setError("当前浏览器不支持画中画");
+              return;
+            }
+            await video.requestPictureInPicture();
+          } catch {
+            setError("画中画启动失败，可能缺少浏览器权限");
+          }
         },
       }),
       [],

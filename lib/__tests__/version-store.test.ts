@@ -128,13 +128,18 @@ describe("version-store", () => {
     expect(getBreakpointFromWidth(1920)).toBe("desktop");
   });
 
-  test("applyThemeToDOM 应写入主题 data 属性与 CSS 变量", () => {
+  test("applyThemeToDOM 应写入 data 属性并通过独立样式表注入变量", () => {
     applyThemeToDOM("cyberpunk");
     expect(document.documentElement.dataset.theme).toBe("cyberpunk");
     const def = getThemeDefinition("cyberpunk");
+    const styleElement = document.getElementById("yyc3-theme-vars");
+    expect(styleElement).not.toBeNull();
+    expect(styleElement?.textContent).toContain("--warm-primary");
+    expect(styleElement?.textContent).toContain(def.colors["--warm-primary"]);
+    // 主题不再写内联变量，避免覆盖 Design Studio 的自定义值
     expect(
       document.documentElement.style.getPropertyValue("--warm-primary"),
-    ).toBe(def.colors["--warm-primary"]);
+    ).toBe("");
   });
 
   test("模块加载应从 localStorage 恢复版本状态", async () => {

@@ -9,19 +9,17 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Sparkles } from "lucide-react";
+import { Settings, Sparkles } from "lucide-react";
 import InfiniteGallery from "@/components/InfiniteGallery";
 import ConfigPanel from "@/components/ConfigPanel";
 import MediaSpace from "@/components/media-space/MediaSpace";
 import PWAProvider from "@/components/PWAProvider";
 import WidgetLayer from "@/components/widgets/WidgetLayer";
 import ThemeVersionProvider from "@/components/ThemeVersionProvider";
-import VersionSwitcher from "@/components/VersionSwitcher";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
-import LocaleSwitcher from "@/components/LocaleSwitcher";
 import XREntry from "@/components/XREntry";
-import { t, useLocale } from "@/lib/i18n";
+import { syncDocumentLang, t, useLocale } from "@/lib/i18n";
 import {
   annotate,
   getAnnotation,
@@ -39,37 +37,46 @@ import {
   DEFAULT_CONFIG,
   loadConfig,
   loadConfigFromHost,
-  hydratePlayerBackground,
+  hydrateBackgrounds,
   applyConfigToDOM,
 } from "@/lib/config-store";
 
 export default function Home() {
   const [config, setConfig] = useState<GalleryConfig>(DEFAULT_CONFIG);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [isClient, setIsClient] = useState(false);
   const [focusAnnotation, setFocusAnnotation] =
     useState<ImageAnnotation | null>(null);
   const locale = useLocale();
   const focusRef = useRef<{ src: string; since: number } | null>(null);
 
-  // 推荐排序仅在挂载时基于历史偏好计算一次，避免浏览中画面跳动
-  const orderedImages = useMemo(() => {
-    const base = GALLERY_IMAGES.map((src, index) => ({
-      src,
-      alt: `音乐影像作品 ${index + 1}`,
-    }));
-    const snapshot = getRecommendationSnapshot();
-    return recommendOrder(base, snapshot.affinity, snapshot.enabled);
-  }, []);
+  // 服务端与首次水合使用固定顺序，挂载后再按历史偏好排序一次
+  const baseImages = useMemo(
+    () =>
+      GALLERY_IMAGES.map((src, index) => ({
+        src,
+        alt: `音乐影像作品 ${index + 1}`,
+      })),
+    [],
+  );
+  const [orderedImages, setOrderedImages] = useState(baseImages);
 
   useEffect(() => {
-    setIsClient(true);
+    const snapshot = getRecommendationSnapshot();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 挂载后从本地推荐快照排序一次
+    setOrderedImages(
+      recommendOrder(baseImages, snapshot.affinity, snapshot.enabled),
+    );
+  }, [baseImages]);
+
+  useEffect(() => {
     const savedConfig = loadConfig();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 挂载后从 localStorage/宿主恢复配置
     setConfig(savedConfig);
     applyConfigToDOM(savedConfig);
 
-    void hydratePlayerBackground(savedConfig).then((hydrated) => {
+    void hydrateBackgrounds(savedConfig).then((hydrated) => {
       if (
+        hydrated.backgroundImage !== savedConfig.backgroundImage ||
         hydrated.playerBackgroundImage !== savedConfig.playerBackgroundImage
       ) {
         setConfig(hydrated);
@@ -78,7 +85,7 @@ export default function Home() {
 
     void loadConfigFromHost().then(async (remoteConfig) => {
       if (!remoteConfig) return;
-      const hydrated = await hydratePlayerBackground(remoteConfig);
+      const hydrated = await hydrateBackgrounds(remoteConfig);
       setConfig(hydrated);
       applyConfigToDOM(hydrated);
     });
@@ -121,15 +128,24 @@ export default function Home() {
     };
   }, []);
 
-  if (!isClient) return null;
+  // 移动端底部导航的「设计」标签通过事件打开设置面板
+  useEffect(() => {
+    const openDesignPanel = () => setIsPanelOpen(true);
+    window.addEventListener("yyc3:open-design-panel", openDesignPanel);
+    return () =>
+      window.removeEventListener("yyc3:open-design-panel", openDesignPanel);
+  }, []);
+
+  // 语言切换统一在设置面板内，页面只负责同步 <html lang>
+  useEffect(() => {
+    syncDocumentLang();
+  }, [locale]);
 
   return (
     <main className="min-h-screen relative">
       <ThemeVersionProvider />
       <PWAProvider />
       <PerformanceMonitor />
-      <VersionSwitcher />
-      <LocaleSwitcher />
       <XREntry />
       <MobileBottomNav />
       {/* 自定义背景层 */}
@@ -275,7 +291,7 @@ export default function Home() {
             }}
           >
             <span className="inline-block animate-float">
-              {t("brand.line1", locale)}
+              {config.brandLine1.trim() || t("brand.line1", locale)}
             </span>
             <span
               className="mx-2 sm:mx-3 md:mx-4 font-light"
@@ -290,7 +306,7 @@ export default function Home() {
               className="inline-block animate-float"
               style={{ animationDelay: "0.5s" }}
             >
-              {t("brand.line2", locale)}
+              {config.brandLine2.trim() || t("brand.line2", locale)}
             </span>
           </p>
 
@@ -325,21 +341,23 @@ export default function Home() {
         onClick={() => setIsPanelOpen(true)}
         className="
 					fixed bottom-24 right-6 z-[9997]
-					w-12 h-12 rounded-full
+					h-11 rounded-full px-3.5
 					glass-effect
-					flex items-center justify-center
+					flex items-center gap-1.5
 					text-white/70 hover:text-white
 					transition-all duration-300
-					hover:scale-110 hover:shadow-lg
+					hover:scale-105 hover:shadow-lg
 					group
 					animate-pulse-glow
 				"
-        aria-label="打开设计配置面板"
-        title="Design Studio · 设计工作室"
+        aria-label="打开设置"
+        title="设置 · 主题与页面配置"
       >
-        <span className="text-xl group-hover:rotate-90 transition-transform duration-500">
-          ⚙
-        </span>
+        <Settings
+          size={16}
+          className="transition-transform duration-500 group-hover:rotate-90"
+        />
+        <span className="text-[10px] font-mono tracking-widest">设置</span>
       </button>
 
       {/* 可启用、拖拽、缩放和迷你化的页面组件 */}

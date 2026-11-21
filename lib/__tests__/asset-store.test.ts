@@ -146,17 +146,19 @@ describe("asset-store", () => {
     expect(window.localStorage.getItem("yyc3-bg-asset:test-id")).toBeNull();
   });
 
-  test("localStorage 写入异常时降级应静默失败但不返回 null（仍返回 id）", async () => {
+  test("localStorage 写入异常时应返回 null，避免产生无效资源 id", async () => {
     mockDBEnabled = false;
-    const originalSetItem = Storage.prototype.setItem;
-    jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("quota exceeded");
-    });
-    const file = new File(["img"], "bg.png", { type: "image/png" });
-    const id = await storeBackgroundAsset(file);
-    expect(id).toMatch(/^bg-/);
-    jest.restoreAllMocks();
-    Storage.prototype.setItem = originalSetItem;
+    const spy = jest
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("quota exceeded");
+      });
+    try {
+      const file = new File(["img"], "bg.png", { type: "image/png" });
+      expect(await storeBackgroundAsset(file)).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test("首次使用应触发 onupgradeneeded 创建 store 与索引", async () => {
@@ -175,14 +177,17 @@ describe("asset-store", () => {
     const originalIDB = global.indexedDB;
     // @ts-expect-error 模拟完全无 IndexedDB 环境
     delete global.indexedDB;
-    const file = new File(["img"], "bg.png", { type: "image/png" });
-    const id = await storeBackgroundAsset(file);
-    expect(id).toMatch(/^bg-/);
-    expect(window.localStorage.getItem(`yyc3-bg-asset:${id}`)).toBeTruthy();
-    Object.defineProperty(global, "indexedDB", {
-      value: originalIDB,
-      configurable: true,
-    });
+    try {
+      const file = new File(["img"], "bg.png", { type: "image/png" });
+      const id = await storeBackgroundAsset(file);
+      expect(id).toMatch(/^bg-/);
+      expect(window.localStorage.getItem(`yyc3-bg-asset:${id}`)).toBeTruthy();
+    } finally {
+      Object.defineProperty(global, "indexedDB", {
+        value: originalIDB,
+        configurable: true,
+      });
+    }
   });
 
   test("降级数据 blob 解析失败时应返回 null", async () => {

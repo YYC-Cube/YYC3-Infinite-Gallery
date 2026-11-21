@@ -15,7 +15,7 @@ import {
   Settings,
   Smartphone,
 } from "lucide-react";
-import { useMediaSpace, setSpaceOpen } from "@/lib/media-space/store";
+import { setSpaceOpen } from "@/lib/media-space/store";
 import { useWidgets, setWidgetEnabled } from "@/lib/widget-store";
 import { t, useLocale } from "@/lib/i18n";
 
@@ -32,41 +32,40 @@ const TAB_ICONS: Record<MobileTab, React.ComponentType<{ size?: number | string 
 };
 
 export default function MobileBottomNav() {
-  const space = useMediaSpace();
   const widgets = useWidgets();
   const locale = useLocale();
   const [activeTab, setActiveTab] = useState<MobileTab>("gallery");
   const [isMobile, setIsMobile] = useState(false);
-  const [safeAreaBottom, setSafeAreaBottom] = useState(0);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const update = () => {
-      setIsMobile(window.innerWidth < 768);
-      // 读取 CSS 安全区内嵌
-      const bottom = parseInt(
-        getComputedStyle(document.documentElement)
-          .getPropertyValue("--safe-area-inset-bottom")
-          .trim() || "0",
-        10,
-      );
-      setSafeAreaBottom(isNaN(bottom) ? 0 : bottom);
-    };
+    const update = () => setIsMobile(window.innerWidth < 768);
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  const handleTabPress = useCallback((tab: MobileTab) => {
-    setActiveTab(tab);
-    if (tab === "media") {
-      if (!space.isOpen) void setSpaceOpen(true);
-    } else if (tab === "widgets") {
-      // 切换到组件标签时，可在此展开首个组件
-    } else if (tab === "design") {
-      // 设计标签：主题/布局快捷切换
-    }
-  }, [space.isOpen]);
+  const handleTabPress = useCallback(
+    (tab: MobileTab) => {
+      setActiveTab(tab);
+      if (tab === "gallery") {
+        // 回到画廊：收起媒体空间，露出 3D 画布
+        setSpaceOpen(false);
+      } else if (tab === "media") {
+        setSpaceOpen(true);
+      } else if (tab === "widgets") {
+        // 组件标签：首次进入时启用时钟作为可见示例
+        const hasEnabled = Object.values(widgets.items).some(
+          (item) => item.enabled,
+        );
+        if (!hasEnabled) setWidgetEnabled("clock", true);
+      } else if (tab === "design") {
+        // 设计标签：打开 Design Studio 配置面板
+        window.dispatchEvent(new CustomEvent("yyc3:open-design-panel"));
+      }
+    },
+    [widgets.items],
+  );
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent, tab: MobileTab) => {
@@ -87,7 +86,7 @@ export default function MobileBottomNav() {
       aria-label="移动端底部导航"
       className="fixed bottom-0 left-0 right-0 z-[10001] flex items-center justify-center gap-1 px-3 sm:px-4"
       style={{
-        paddingBottom: `calc(${safeAreaBottom}px + 8px)`,
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
       }}
     >
       <div
@@ -112,7 +111,6 @@ export default function MobileBottomNav() {
               }`}
               aria-label={t(`nav.${tab}`, locale)}
               aria-selected={isActive}
-              aria-controls={`mobile-tab-${tab}`}
               id={`mobile-tab-${tab}`}
               title={t(`nav.${tab}`, locale)}
             >
@@ -136,7 +134,7 @@ export default function MobileBottomNav() {
           <button
             type="button"
             onClick={() => {
-              if (!space.isOpen) void setSpaceOpen(true);
+              setSpaceOpen(true);
               setActiveTab("media");
             }}
             className="h-6 w-6 rounded-full border border-warm/30 bg-black/40 flex items-center justify-center text-[10px] text-warm-primary hover:bg-warm/20"

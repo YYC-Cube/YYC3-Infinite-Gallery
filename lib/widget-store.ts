@@ -169,6 +169,9 @@ function restore(): WidgetState {
 let state = restore();
 let persistTimer: number | null = null;
 
+/** 服务端与首次水合固定返回默认组件状态 */
+const SERVER_WIDGETS = defaultState();
+
 function persist() {
   if (typeof window === "undefined") return;
   if (persistTimer) window.clearTimeout(persistTimer);
@@ -202,7 +205,7 @@ export function useWidgets(): WidgetState {
   return useSyncExternalStore(
     subscribeWidgets,
     getWidgetsSnapshot,
-    getWidgetsSnapshot,
+    () => SERVER_WIDGETS,
   );
 }
 

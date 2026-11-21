@@ -52,8 +52,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Test
-        run: pnpm test
+      - name: Test & Coverage Gate
+        run: pnpm test:coverage
 
       - name: Docs standard check
         run: pnpm docs:check
@@ -93,6 +93,14 @@ jobs:
         env:
           NODE_ENV: production
 
+      # 供 E2E Job 复用，避免重复构建
+      - name: Upload static output for E2E
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-out
+          path: ./out
+          retention-days: 1
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -124,10 +132,11 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Build for E2E
-        run: pnpm build
-        env:
-          NODE_ENV: production
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: static-out
+          path: ./out
 
       - name: Run E2E tests
         run: pnpm test:e2e

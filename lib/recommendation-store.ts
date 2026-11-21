@@ -166,8 +166,8 @@ export function affinityScore(affinity: ImageAffinity | undefined): number {
 }
 
 /**
- * 基于偏好对图片序列重新排序：高偏好作品提前，未浏览作品按原序穿插保留探索性。
- * 保序策略避免完全打乱当前视觉节奏。
+ * 基于偏好对图片序列重新排序：按得分降序，未浏览作品得分为 0 排在后面；
+ * 得分相同时保持原顺序，避免完全打乱当前视觉节奏。
  */
 export function recommendOrder<T extends { src: string }>(
   images: T[],

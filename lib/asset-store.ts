@@ -27,11 +27,12 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function saveFallback(id: string, dataUrl: string) {
+function saveFallback(id: string, dataUrl: string): boolean {
   try {
     localStorage.setItem(`${FALLBACK_PREFIX}${id}`, dataUrl);
+    return true;
   } catch {
-    /* 配额仍不可用时仅保留当前会话预览 */
+    return false;
   }
 }
 
@@ -73,8 +74,8 @@ export async function storeBackgroundAsset(file: File): Promise<string | null> {
     return id;
   } catch {
     try {
-      saveFallback(id, await readAsDataUrl(file));
-      return id;
+      const dataUrl = await readAsDataUrl(file);
+      return saveFallback(id, dataUrl) ? id : null;
     } catch {
       return null;
     }

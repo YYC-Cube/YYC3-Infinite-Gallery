@@ -1,18 +1,13 @@
 /**
  * @file ESLint 9 Flat Config
- * @description YYC³ Infinite Gallery 代码质量门禁配置，兼容 Next.js 15 eslint-config
+ * @description YYC³ Infinite Gallery 代码质量门禁配置，使用 Next.js 16 原生 Flat Config
  * @author YYC³ Team
- * @version 1.0.0
+ * @version 2.0.0
  * @created 2026-11-18
- * @updated 2026-11-18
+ * @updated 2026-11-21
  */
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { FlatCompat } from '@eslint/eslintrc';
-
-const compat = new FlatCompat({
-	baseDirectory: dirname(fileURLToPath(import.meta.url)),
-});
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals';
+import nextTypescript from 'eslint-config-next/typescript';
 
 const config = [
 	{
@@ -25,8 +20,8 @@ const config = [
 			'next-env.d.ts',
 		],
 	},
-	...compat.extends('next/core-web-vitals'),
-	...compat.extends('next/typescript'),
+	...nextCoreWebVitals,
+	...nextTypescript,
 	{
 		rules: {
 			'@typescript-eslint/no-unused-vars': [
@@ -34,6 +29,16 @@ const config = [
 				{ argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
 			],
 			'@next/next/no-img-element': 'off',
+		},
+	},
+	{
+		// shadcn/ui 模板按上游实现维护，不对其内部 effect/ref 写法施加项目级 Compiler 规则
+		files: ['components/ui/**/*.{ts,tsx}'],
+		rules: {
+			'react-hooks/set-state-in-effect': 'off',
+			'react-hooks/purity': 'off',
+			'react-hooks/immutability': 'off',
+			'react-hooks/refs': 'off',
 		},
 	},
 ];

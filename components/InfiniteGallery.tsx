@@ -2,14 +2,28 @@
  * @file InfiniteGallery 组件
  * @description 3D无限滚动画廊组件，使用React Three Fiber实现沉浸式图片展示效果
  * @author YYC³
- * @version 1.1.0
+ * @version 2.0.0
  * @created 2025-09-15
- * @updated 2026-11-20
+ * @updated 2026-11-21
  */
 'use client';
 
 import type React from 'react';
-import { useRef, useMemo, useCallback, useState, useEffect } from 'react';
+import {
+	Suspense,
+	useRef,
+	useMemo,
+	useCallback,
+	useState,
+	useEffect,
+	useSyncExternalStore,
+} from 'react';
+
+/*
+ * R3F 的 useFrame 需要逐帧命令式修改 ref、mesh 与材质 uniform，
+ * 这是渲染循环而非 React 渲染，显式关闭 Compiler 的不可变性检查。
+ */
+/* eslint-disable react-hooks/immutability */
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
@@ -71,12 +85,29 @@ interface PlaneData {
 	z: number;
 	imageIndex: number;
 	x: number;
-	y: number; // Added y property for vertical positioning
+	y: number;
+}
+
+interface MutableRef<T> {
+	current: T;
+}
+
+interface GalleryControls {
+	velocity: MutableRef<number>;
+	autoPlay: MutableRef<boolean>;
+	lastInteraction: MutableRef<number>;
+	hovered: MutableRef<Set<number>>;
 }
 
 const DEFAULT_DEPTH_RANGE = 50;
 const MAX_HORIZONTAL_OFFSET = 8;
 const MAX_VERTICAL_OFFSET = 8;
+const MAX_VELOCITY = 40;
+
+/** 客户端挂载标记：服务端与首次水合为 false，避免读浏览器能力造成不一致 */
+const subscribeMounted = () => () => {};
+const getMounted = () => true;
+const getServerMounted = () => false;
 
 // Custom shader material for blur, opacity, and cloth folding effects
 const createClothMaterial = () => {
@@ -174,49 +205,55 @@ const createClothMaterial = () => {
 	});
 };
 
-function ImagePlane({
-	texture,
-	position,
-	scale,
-	material,
-}: {
-	texture: THREE.Texture;
-	position: [number, number, number];
-	scale: [number, number, number];
-	material: THREE.ShaderMaterial;
-}) {
-	const meshRef = useRef<THREE.Mesh>(null);
-	const [isHovered, setIsHovered] = useState(false);
+function buildSpatialPositions(count: number): { x: number; y: number }[] {
+	const positions: { x: number; y: number }[] = [];
+	for (let i = 0; i < count; i++) {
+		// Create varied distribution patterns for both axes
+		const horizontalAngle = (i * 2.618) % (Math.PI * 2); // Golden angle for natural distribution
+		const verticalAngle = (i * 1.618 + Math.PI / 3) % (Math.PI * 2); // Offset angle for vertical
 
-	useEffect(() => {
-		if (material && texture) {
-			material.uniforms.map!.value = texture;
-		}
-	}, [material, texture]);
+		const horizontalRadius = (i % 3) * 1.2; // Vary the distance from center
+		const verticalRadius = ((i + 1) % 4) * 0.8; // Different pattern for vertical
 
-	useEffect(() => {
-		if (material && material.uniforms) {
-			material.uniforms.isHovered!.value = isHovered ? 1.0 : 0.0;
-		}
-	}, [material, isHovered]);
+		const x =
+			(Math.sin(horizontalAngle) * horizontalRadius * MAX_HORIZONTAL_OFFSET) / 3;
+		const y =
+			(Math.cos(verticalAngle) * verticalRadius * MAX_VERTICAL_OFFSET) / 4;
 
-	return (
-		<mesh
-			ref={meshRef}
-			position={position}
-			scale={scale}
-			material={material}
-			onPointerEnter={() => setIsHovered(true)}
-			onPointerLeave={() => setIsHovered(false)}
-		>
-			<planeGeometry args={[1, 1, 32, 32]} />
-		</mesh>
-	);
+		positions.push({ x, y });
+	}
+	return positions;
+}
+
+function createPlanes(
+	visibleCount: number,
+	totalImages: number,
+	positions: { x: number; y: number }[],
+): PlaneData[] {
+	return Array.from({ length: visibleCount }, (_, i) => ({
+		index: i,
+		z: visibleCount > 0 ? ((DEFAULT_DEPTH_RANGE / visibleCount) * i) % DEFAULT_DEPTH_RANGE : 0,
+		imageIndex: totalImages > 0 ? i % totalImages : 0,
+		x: positions[i]?.x ?? 0,
+		y: positions[i]?.y ?? 0,
+	}));
+}
+
+function getTextureAspect(texture: THREE.Texture): number {
+	const image = texture.image as { width?: number; height?: number } | undefined;
+	if (
+		typeof image?.width === 'number' &&
+		typeof image?.height === 'number' &&
+		image.width > 0 &&
+		image.height > 0
+	) {
+		return image.width / image.height;
+	}
+	return 1;
 }
 
 function GalleryScene({
 	images,
-	speed = 1,
 	visibleCount = 8,
 	fadeSettings = {
 		fadeIn: { start: 0.05, end: 0.15 },
@@ -228,11 +265,12 @@ function GalleryScene({
 		maxBlur: 3.0,
 	},
 	onFocusImage,
-}: Omit<InfiniteGalleryProps, 'className' | 'style'>) {
-	const [scrollVelocity, setScrollVelocity] = useState(0);
-	const [autoPlay, setAutoPlay] = useState(true);
-	const lastInteraction = useRef(Date.now());
+	controls,
+}: Omit<InfiniteGalleryProps, 'className' | 'style'> & {
+	controls: GalleryControls;
+}) {
 	const lastFocusedIndex = useRef<number>(-1);
+	const meshesRef = useRef<Array<THREE.Mesh | null>>([]);
 
 	// Normalize images to objects
 	const normalizedImages = useMemo(
@@ -243,8 +281,13 @@ function GalleryScene({
 		[images]
 	);
 
-	// Load textures
+	// Load textures (suspends until ready)
 	const textures = useTexture(normalizedImages.map((img) => img.src));
+	const texturesRef = useRef(textures);
+
+	useEffect(() => {
+		texturesRef.current = textures;
+	}, [textures]);
 
 	// Create materials pool
 	const materials = useMemo(
@@ -252,136 +295,64 @@ function GalleryScene({
 		[visibleCount]
 	);
 
-	const spatialPositions = useMemo(() => {
-		const positions: { x: number; y: number }[] = [];
-		const maxHorizontalOffset = MAX_HORIZONTAL_OFFSET;
-		const maxVerticalOffset = MAX_VERTICAL_OFFSET;
-
-		for (let i = 0; i < visibleCount; i++) {
-			// Create varied distribution patterns for both axes
-			const horizontalAngle = (i * 2.618) % (Math.PI * 2); // Golden angle for natural distribution
-			const verticalAngle = (i * 1.618 + Math.PI / 3) % (Math.PI * 2); // Offset angle for vertical
-
-			const horizontalRadius = (i % 3) * 1.2; // Vary the distance from center
-			const verticalRadius = ((i + 1) % 4) * 0.8; // Different pattern for vertical
-
-			const x =
-				(Math.sin(horizontalAngle) * horizontalRadius * maxHorizontalOffset) /
-				3;
-			const y =
-				(Math.cos(verticalAngle) * verticalRadius * maxVerticalOffset) / 4;
-
-			positions.push({ x, y });
-		}
-
-		return positions;
-	}, [visibleCount]);
-
-	const totalImages = normalizedImages.length;
-	const depthRange = DEFAULT_DEPTH_RANGE;
-
-	// Initialize plane data
-	const planesData = useRef<PlaneData[]>(
-		Array.from({ length: visibleCount }, (_, i) => ({
-			index: i,
-			z: visibleCount > 0 ? ((depthRange / visibleCount) * i) % depthRange : 0,
-			imageIndex: totalImages > 0 ? i % totalImages : 0,
-			x: spatialPositions[i]?.x ?? 0, // Use spatial positions for x
-			y: spatialPositions[i]?.y ?? 0, // Use spatial positions for y
-		}))
-	);
+	// 释放 GPU 资源：材质随 visibleCount 变化回收，纹理在组件卸载时回收
+	useEffect(() => {
+		return () => {
+			materials.forEach((material) => material.dispose());
+		};
+	}, [materials]);
 
 	useEffect(() => {
-		planesData.current = Array.from({ length: visibleCount }, (_, i) => ({
-			index: i,
-			z:
-				visibleCount > 0
-					? ((depthRange / Math.max(visibleCount, 1)) * i) % depthRange
-					: 0,
-			imageIndex: totalImages > 0 ? i % totalImages : 0,
-			x: spatialPositions[i]?.x ?? 0,
-			y: spatialPositions[i]?.y ?? 0,
-		}));
-	}, [depthRange, spatialPositions, totalImages, visibleCount]);
-
-	// Handle scroll input
-	const handleWheel = useCallback(
-		(event: WheelEvent) => {
-			event.preventDefault();
-			setScrollVelocity((prev) => prev + event.deltaY * 0.01 * speed);
-			setAutoPlay(false);
-			lastInteraction.current = Date.now();
-		},
-		[speed]
-	);
-
-	// Handle keyboard input
-	const handleKeyDown = useCallback(
-		(event: KeyboardEvent) => {
-			if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
-				setScrollVelocity((prev) => prev - 2 * speed);
-				setAutoPlay(false);
-				lastInteraction.current = Date.now();
-			} else if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
-				setScrollVelocity((prev) => prev + 2 * speed);
-				setAutoPlay(false);
-				lastInteraction.current = Date.now();
-			}
-		},
-		[speed]
-	);
-
-	useEffect(() => {
-		const canvas = document.querySelector('canvas');
-		if (canvas) {
-			canvas.addEventListener('wheel', handleWheel, { passive: false });
-			document.addEventListener('keydown', handleKeyDown);
-
-			return () => {
-				canvas.removeEventListener('wheel', handleWheel);
-				document.removeEventListener('keydown', handleKeyDown);
-			};
-		}
-	}, [handleWheel, handleKeyDown]);
-
-	// Auto-play logic
-	useEffect(() => {
-		const interval = setInterval(() => {
-			if (Date.now() - lastInteraction.current > 3000) {
-				setAutoPlay(true);
-			}
-		}, 1000);
-		return () => clearInterval(interval);
+		return () => {
+			texturesRef.current.forEach((texture) => texture.dispose());
+		};
 	}, []);
 
+	const spatialPositions = useMemo(
+		() => buildSpatialPositions(visibleCount),
+		[visibleCount]
+	);
+
+	const totalImages = normalizedImages.length;
+
+	// 初始化平面数据；仅在尺寸/图源变化时重建
+	const planesData = useRef<PlaneData[]>(
+		createPlanes(visibleCount, totalImages, spatialPositions)
+	);
+
+	useEffect(() => {
+		planesData.current = createPlanes(
+			visibleCount,
+			totalImages,
+			spatialPositions
+		);
+	}, [spatialPositions, totalImages, visibleCount]);
+
 	useFrame((state, delta) => {
-		// Apply auto-play
-		if (autoPlay) {
-			setScrollVelocity((prev) => prev + 0.3 * delta);
+		const dt = Math.min(delta, 0.1);
+
+		// Apply auto-play + damping (frame-rate independent)
+		if (controls.autoPlay.current) {
+			controls.velocity.current += 0.3 * dt;
 		}
+		controls.velocity.current *= Math.pow(0.95, dt * 60);
+		controls.velocity.current = THREE.MathUtils.clamp(
+			controls.velocity.current,
+			-MAX_VELOCITY,
+			MAX_VELOCITY
+		);
 
-		// Damping
-		setScrollVelocity((prev) => prev * 0.95);
-
-		// Update time uniform for all materials
+		const scrollVelocity = controls.velocity.current;
 		const time = state.clock.getElapsedTime();
-		materials.forEach((material) => {
-			if (material && material.uniforms) {
-				material.uniforms.time!.value = time;
-				material.uniforms.scrollForce!.value = scrollVelocity;
-			}
-		});
-
-		// Update plane positions
+		const totalRange = DEFAULT_DEPTH_RANGE;
 		const imageAdvance =
 			totalImages > 0 ? visibleCount % totalImages || totalImages : 0;
-		const totalRange = depthRange;
 
 		let closestImageIndex = -1;
 		let closestDistance = Number.POSITIVE_INFINITY;
 
 		planesData.current.forEach((plane, i) => {
-			let newZ = plane.z + scrollVelocity * delta * 10;
+			let newZ = plane.z + scrollVelocity * dt * 10;
 			let wrapsForward = 0;
 			let wrapsBackward = 0;
 
@@ -407,7 +378,6 @@ function GalleryScene({
 			plane.x = spatialPositions[i]?.x ?? 0;
 			plane.y = spatialPositions[i]?.y ?? 0;
 
-			// Calculate opacity based on fade settings
 			const normalizedPosition = plane.z / totalRange; // 0 to 1
 			let opacity = 1;
 
@@ -415,77 +385,88 @@ function GalleryScene({
 				normalizedPosition >= fadeSettings.fadeIn.start &&
 				normalizedPosition <= fadeSettings.fadeIn.end
 			) {
-				// Fade in: opacity goes from 0 to 1 within the fade in range
 				const fadeInProgress =
 					(normalizedPosition - fadeSettings.fadeIn.start) /
 					(fadeSettings.fadeIn.end - fadeSettings.fadeIn.start);
 				opacity = fadeInProgress;
 			} else if (normalizedPosition < fadeSettings.fadeIn.start) {
-				// Before fade in starts: fully transparent
 				opacity = 0;
 			} else if (
 				normalizedPosition >= fadeSettings.fadeOut.start &&
 				normalizedPosition <= fadeSettings.fadeOut.end
 			) {
-				// Fade out: opacity goes from 1 to 0 within the fade out range
 				const fadeOutProgress =
 					(normalizedPosition - fadeSettings.fadeOut.start) /
 					(fadeSettings.fadeOut.end - fadeSettings.fadeOut.start);
 				opacity = 1 - fadeOutProgress;
 			} else if (normalizedPosition > fadeSettings.fadeOut.end) {
-				// After fade out ends: fully transparent
 				opacity = 0;
 			}
 
-			// Clamp opacity between 0 and 1
 			opacity = Math.max(0, Math.min(1, opacity));
 
 			// 追踪最靠近镜头的图片（worldZ 接近 0）
-			const worldZ = plane.z - depthRange / 2;
+			const worldZ = plane.z - totalRange / 2;
 			const distanceToCamera = Math.abs(worldZ);
 			if (opacity > 0.3 && distanceToCamera < closestDistance) {
 				closestDistance = distanceToCamera;
 				closestImageIndex = plane.imageIndex;
 			}
 
-			// Calculate blur based on blur settings
 			let blur = 0;
 
 			if (
 				normalizedPosition >= blurSettings.blurIn.start &&
 				normalizedPosition <= blurSettings.blurIn.end
 			) {
-				// Blur in: blur goes from maxBlur to 0 within the blur in range
 				const blurInProgress =
 					(normalizedPosition - blurSettings.blurIn.start) /
 					(blurSettings.blurIn.end - blurSettings.blurIn.start);
 				blur = blurSettings.maxBlur * (1 - blurInProgress);
 			} else if (normalizedPosition < blurSettings.blurIn.start) {
-				// Before blur in starts: full blur
 				blur = blurSettings.maxBlur;
 			} else if (
 				normalizedPosition >= blurSettings.blurOut.start &&
 				normalizedPosition <= blurSettings.blurOut.end
 			) {
-				// Blur out: blur goes from 0 to maxBlur within the blur out range
 				const blurOutProgress =
 					(normalizedPosition - blurSettings.blurOut.start) /
 					(blurSettings.blurOut.end - blurSettings.blurOut.start);
 				blur = blurSettings.maxBlur * blurOutProgress;
 			} else if (normalizedPosition > blurSettings.blurOut.end) {
-				// After blur out ends: full blur
 				blur = blurSettings.maxBlur;
 			}
 
-			// Clamp blur to reasonable values
 			blur = Math.max(0, Math.min(blurSettings.maxBlur, blur));
 
-			// Update material uniforms
+			const mesh = meshesRef.current[i];
 			const material = materials[i];
-			if (material && material.uniforms) {
-				material.uniforms.opacity!.value = opacity;
-				material.uniforms.blurAmount!.value = blur;
+			const texture = textures[plane.imageIndex];
+
+			if (!mesh || !material || !texture) {
+				if (mesh) mesh.visible = false;
+				return;
 			}
+
+			if (material.uniforms.map!.value !== texture) {
+				material.uniforms.map!.value = texture;
+			}
+			const aspect = getTextureAspect(texture);
+			if (aspect > 1) {
+				mesh.scale.set(2 * aspect, 2, 1);
+			} else {
+				mesh.scale.set(2, 2 / aspect, 1);
+			}
+			mesh.position.set(plane.x, plane.y, worldZ);
+			mesh.visible = opacity > 0.01;
+
+			material.uniforms.opacity!.value = opacity;
+			material.uniforms.blurAmount!.value = blur;
+			material.uniforms.time!.value = time;
+			material.uniforms.scrollForce!.value = scrollVelocity;
+			material.uniforms.isHovered!.value = controls.hovered.current.has(i)
+				? 1.0
+				: 0.0;
 		});
 
 		// 焦点变化回调（用于行为采集）：仅当最靠近镜头的图片索引改变时触发
@@ -503,43 +484,20 @@ function GalleryScene({
 
 	return (
 		<>
-			{planesData.current.map((plane, i) => {
-				const texture = textures[plane.imageIndex];
-				const material = materials[i];
-
-				if (!texture || !material) return null;
-
-				const worldZ = plane.z - depthRange / 2;
-
-				// Calculate scale to maintain aspect ratio
-				let aspect = 1;
-				if (texture.image) {
-					const img = texture.image as {
-						width?: number;
-						height?: number;
-					};
-					if (
-						typeof img.width === 'number' &&
-						typeof img.height === 'number' &&
-						img.width > 0 &&
-						img.height > 0
-					) {
-						aspect = img.width / img.height;
-					}
-				}
-				const scale: [number, number, number] =
-					aspect > 1 ? [2 * aspect, 2, 1] : [2, 2 / aspect, 1];
-
-				return (
-					<ImagePlane
-						key={plane.index}
-						texture={texture}
-						position={[plane.x, plane.y, worldZ]} // Position planes relative to camera center
-						scale={scale}
-						material={material}
-					/>
-				);
-			})}
+			{Array.from({ length: visibleCount }).map((_, i) => (
+				<mesh
+					key={i}
+					ref={(mesh) => {
+						meshesRef.current[i] = mesh;
+					}}
+					visible={false}
+					material={materials[i]}
+					onPointerEnter={() => controls.hovered.current.add(i)}
+					onPointerLeave={() => controls.hovered.current.delete(i)}
+				>
+					<planeGeometry args={[1, 1, 32, 32]} />
+				</mesh>
+			))}
 		</>
 	);
 }
@@ -555,17 +513,19 @@ function FallbackGallery({ images }: { images: ImageItem[] }) {
 	);
 
 	return (
-		<div className="flex flex-col items-center justify-center h-full bg-gray-100 p-4">
-			<p className="text-gray-600 mb-4">
+		<div className="flex h-full flex-col items-center justify-center overflow-y-auto bg-gray-100 p-4">
+			<p className="mb-4 text-gray-600">
 				您的浏览器不支持WebGL。以下是图片列表：
 			</p>
-			<div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+			<div className="grid max-h-96 grid-cols-2 gap-4 overflow-y-auto md:grid-cols-3">
 				{normalizedImages.map((img, i) => (
 					<img
 						key={i}
 						src={img.src || '/placeholder.svg'}
-						alt={img.alt}
-						className="w-full h-32 object-cover rounded"
+						alt={img.alt || `作品 ${i + 1}`}
+						loading="lazy"
+						decoding="async"
+						className="h-32 w-full rounded object-cover"
 					/>
 				))}
 			</div>
@@ -575,6 +535,8 @@ function FallbackGallery({ images }: { images: ImageItem[] }) {
 
 export default function InfiniteGallery({
 	images,
+	speed = 1,
+	visibleCount = 8,
 	className = 'h-96 w-full',
 	style,
 	onFocusImage,
@@ -588,15 +550,58 @@ export default function InfiniteGallery({
 		maxBlur: 8.0,
 	},
 }: InfiniteGalleryProps) {
+	const mounted = useSyncExternalStore(
+		subscribeMounted,
+		getMounted,
+		getServerMounted
+	);
 	const [webglSupported, setWebglSupported] = useState(true);
+	const containerRef = useRef<HTMLDivElement>(null);
+	const pointerRef = useRef<{ id: number; y: number } | null>(null);
+
+	// 共享控制引用：输入事件与渲染循环读写同一份状态，避免逐帧触发 React 更新
+	const velocity = useRef(0);
+	const autoPlay = useRef(true);
+	const lastInteraction = useRef(0);
+	const hovered = useRef<Set<number>>(new Set());
+	const controls = useMemo<GalleryControls>(
+		() => ({ velocity, autoPlay, lastInteraction, hovered }),
+		[]
+	);
+
+	const normalizedImages = useMemo(
+		() =>
+			images.map((img) =>
+				typeof img === 'string' ? { src: img, alt: '' } : img
+			),
+		[images]
+	);
+
+	const markInteraction = useCallback(() => {
+		autoPlay.current = false;
+		lastInteraction.current = Date.now();
+	}, []);
+
+	const pushVelocity = useCallback(
+		(delta: number) => {
+			velocity.current = THREE.MathUtils.clamp(
+				velocity.current + delta,
+				-MAX_VELOCITY,
+				MAX_VELOCITY
+			);
+			markInteraction();
+		},
+		[markInteraction]
+	);
 
 	useEffect(() => {
-		// Check WebGL support
 		try {
 			const canvas = document.createElement('canvas');
 			const gl =
-				canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+				canvas.getContext('webgl') ||
+				canvas.getContext('experimental-webgl');
 			if (!gl) {
+				// eslint-disable-next-line react-hooks/set-state-in-effect -- 仅在挂载后探测一次 WebGL 能力
 				setWebglSupported(false);
 			}
 		} catch {
@@ -604,27 +609,146 @@ export default function InfiniteGallery({
 		}
 	}, []);
 
-	if (!webglSupported) {
-		return (
-			<div className={className} style={style}>
-				<FallbackGallery images={images} />
-			</div>
-		);
-	}
+	// 滚轮：绑定在画廊容器而非全局 canvas，避免多 canvas 场景误绑
+	useEffect(() => {
+		const element = containerRef.current;
+		if (!element) return;
+		const onWheel = (event: WheelEvent) => {
+			event.preventDefault();
+			pushVelocity(event.deltaY * 0.01 * speed);
+		};
+		element.addEventListener('wheel', onWheel, { passive: false });
+		return () => element.removeEventListener('wheel', onWheel);
+	}, [pushVelocity, speed]);
+
+	// 键盘：忽略输入控件内的方向键
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent) => {
+			const target = event.target as HTMLElement | null;
+			if (
+				target &&
+				(target.isContentEditable ||
+					/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+			) {
+				return;
+			}
+			if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+				event.preventDefault();
+				pushVelocity(-2 * speed);
+			} else if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+				event.preventDefault();
+				pushVelocity(2 * speed);
+			}
+		};
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [pushVelocity, speed]);
+
+	// 自动播放恢复：3s 无交互后继续
+	useEffect(() => {
+		const timer = window.setInterval(() => {
+			if (Date.now() - lastInteraction.current > 3000) {
+				autoPlay.current = true;
+			}
+		}, 1000);
+		return () => window.clearInterval(timer);
+	}, []);
+
+	const onPointerDown = useCallback(
+		(event: React.PointerEvent<HTMLDivElement>) => {
+			if (event.pointerType === 'mouse') return;
+			pointerRef.current = { id: event.pointerId, y: event.clientY };
+			event.currentTarget.setPointerCapture?.(event.pointerId);
+			markInteraction();
+		},
+		[markInteraction]
+	);
+
+	const onPointerMove = useCallback(
+		(event: React.PointerEvent<HTMLDivElement>) => {
+			const pointer = pointerRef.current;
+			if (!pointer || pointer.id !== event.pointerId) return;
+			const dy = event.clientY - pointer.y;
+			if (Math.abs(dy) < 2) return;
+			pointer.y = event.clientY;
+			pushVelocity(dy * 0.08 * speed);
+		},
+		[pushVelocity, speed]
+	);
+
+	const endPointer = useCallback(
+		(event: React.PointerEvent<HTMLDivElement>) => {
+			if (pointerRef.current?.id !== event.pointerId) return;
+			pointerRef.current = null;
+			if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+				event.currentTarget.releasePointerCapture(event.pointerId);
+			}
+		},
+		[]
+	);
 
 	return (
-		<div className={className} style={style}>
-			<Canvas
-				camera={{ position: [0, 0, 0], fov: 55 }}
-				gl={{ antialias: true, alpha: true }}
-			>
-				<GalleryScene
-					images={images}
-					fadeSettings={fadeSettings}
-					blurSettings={blurSettings}
-					onFocusImage={onFocusImage}
-				/>
-			</Canvas>
+		<div
+			ref={containerRef}
+			className={`${className} touch-none`}
+			style={style}
+			onPointerDown={onPointerDown}
+			onPointerMove={onPointerMove}
+			onPointerUp={endPointer}
+			onPointerCancel={endPointer}
+		>
+			{/* 服务端与首帧可索引内容：保证导出 HTML 有作品文本与首图 */}
+			<ul className="sr-only" aria-label="作品列表">
+				{normalizedImages.map((img, index) => (
+					<li key={`${img.src}-${index}`}>
+						{img.alt || `音乐影像作品 ${index + 1}`}
+					</li>
+				))}
+			</ul>
+
+			{!mounted && (
+				<div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden bg-[#0a0908]">
+					{normalizedImages[0] && (
+						<img
+							src={normalizedImages[0].src}
+							alt={normalizedImages[0].alt || '作品首图'}
+							className="absolute inset-0 h-full w-full object-cover opacity-40"
+						/>
+					)}
+					<div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/50" />
+					<p className="relative font-mono text-[10px] tracking-[0.3em] text-white/40">
+						作品载入中
+					</p>
+				</div>
+			)}
+
+			{mounted && webglSupported && normalizedImages.length > 0 && (
+				<Canvas
+					camera={{ position: [0, 0, 0], fov: 55 }}
+					gl={{
+						antialias: true,
+						alpha: true,
+						powerPreference: 'high-performance',
+					}}
+					dpr={[1, 2]}
+				>
+					<Suspense fallback={null}>
+						<GalleryScene
+							images={images}
+							speed={speed}
+							visibleCount={visibleCount}
+							fadeSettings={fadeSettings}
+							blurSettings={blurSettings}
+							onFocusImage={onFocusImage}
+							controls={controls}
+						/>
+					</Suspense>
+				</Canvas>
+			)}
+
+			{mounted && !webglSupported && (
+				<FallbackGallery images={images} />
+			)}
 		</div>
 	);
 }

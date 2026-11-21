@@ -1,19 +1,15 @@
 /**
  * @file PWA 与宿主运行时
- * @description 注册 Service Worker、探测宿主机能力、显示离线状态与可安装性提示
+ * @description 注册 Service Worker、探测宿主机能力、显示离线状态、可安装性与新版本提示
  * @author YYC³
- * @version 1.2.0
+ * @version 1.3.0
  * @created 2026-11-19
- * @updated 2026-11-20
+ * @updated 2026-11-21
  */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Download,
-  WifiOff,
-  X,
-} from "lucide-react";
+import { Download, RefreshCw, WifiOff, X } from "lucide-react";
 import { flushOutbox, probeHost, useHostState } from "@/lib/host-bridge";
 
 type BeforeInstallPromptEvent = Event & {
@@ -30,7 +26,15 @@ export default function PWAProvider() {
   const [isInstalled, setIsInstalled] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
   const [cachedCount, setCachedCount] = useState(0);
+  const [updateReady, setUpdateReady] = useState(false);
   const dismissRef = useRef<number | null>(null);
+  const installedRef = useRef(false);
+  const waitingWorkerRef = useRef<ServiceWorker | null>(null);
+  const reloadingRef = useRef(false);
+
+  useEffect(() => {
+    installedRef.current = isInstalled;
+  }, [isInstalled]);
 
   useEffect(() => {
     const sync = () => setBrowserOnline(navigator.onLine);
@@ -56,18 +60,53 @@ export default function PWAProvider() {
       navigator.serviceWorker.addEventListener("message", onMessage);
     }
 
+    const onControllerChange = () => {
+      if (!reloadingRef.current) return;
+      reloadingRef.current = false;
+      window.location.reload();
+    };
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        onControllerChange,
+      );
+    }
+
+    const markWaiting = (worker: ServiceWorker | null) => {
+      if (!worker) return;
+      waitingWorkerRef.current = worker;
+      setUpdateReady(true);
+    };
+
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-      void navigator.serviceWorker.register("/sw.js").then(() => {
-        void navigator.serviceWorker.ready.then((registration) => {
-          // standalone 模式下认为已安装
+      void navigator.serviceWorker
+        .register("/sw.js")
+        .then((registration) => {
           if (window.matchMedia("(display-mode: standalone)").matches) {
             setIsInstalled(true);
           }
-          registration.active?.postMessage({ type: "CACHE_STATUS" });
+          markWaiting(registration.waiting);
+          registration.addEventListener("updatefound", () => {
+            const installing = registration.installing;
+            if (!installing) return;
+            installing.addEventListener("statechange", () => {
+              // 已有控制器时，新 SW 进入 installed 表示有可用更新
+              if (
+                installing.state === "installed" &&
+                navigator.serviceWorker.controller
+              ) {
+                markWaiting(installing);
+              }
+            });
+          });
+          void navigator.serviceWorker.ready.then((readyRegistration) => {
+            readyRegistration.active?.postMessage({ type: "CACHE_STATUS" });
+            markWaiting(readyRegistration.waiting);
+          });
+        })
+        .catch(() => {
+          /* PWA 不可用时不影响主应用 */
         });
-      }).catch(() => {
-        /* PWA 不可用时不影响主应用 */
-      });
     }
 
     const onBeforeInstallPrompt = (rawEvent: Event) => {
@@ -75,10 +114,16 @@ export default function PWAProvider() {
       const event = rawEvent as BeforeInstallPromptEvent;
       setDeferredPrompt(event);
       // 仅在非独立模式下显示安装提示，且不打扰已安装用户
-      if (!isInstalled && window.matchMedia("(display-mode: browser)").matches) {
+      if (
+        !installedRef.current &&
+        window.matchMedia("(display-mode: browser)").matches
+      ) {
         setShowInstall(true);
         // 10 秒后自动隐藏提示
-        dismissRef.current = window.setTimeout(() => setShowInstall(false), 10000);
+        dismissRef.current = window.setTimeout(
+          () => setShowInstall(false),
+          10000,
+        );
       }
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
@@ -93,23 +138,32 @@ export default function PWAProvider() {
     return () => {
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.removeEventListener("message", onMessage);
+        navigator.serviceWorker.removeEventListener(
+          "controllerchange",
+          onControllerChange,
+        );
       }
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("online", onOnline);
       window.clearInterval(timer);
       if (dismissRef.current) window.clearTimeout(dismissRef.current);
     };
-  }, [isInstalled]);
+  }, []);
 
   const handleInstall = useCallback(async () => {
     if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setIsInstalled(true);
-      setShowInstall(false);
+    try {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") {
+        setIsInstalled(true);
+        setShowInstall(false);
+      }
+    } catch {
+      /* 用户取消或浏览器拒绝安装时不阻断主流程 */
+    } finally {
+      setDeferredPrompt(null);
     }
-    setDeferredPrompt(null);
   }, [deferredPrompt]);
 
   const handleDismiss = useCallback(() => {
@@ -117,12 +171,27 @@ export default function PWAProvider() {
     if (dismissRef.current) window.clearTimeout(dismissRef.current);
   }, []);
 
+  const applyUpdate = useCallback(() => {
+    const waiting = waitingWorkerRef.current;
+    if (!waiting) {
+      window.location.reload();
+      return;
+    }
+    reloadingRef.current = true;
+    waiting.postMessage({ type: "SKIP_WAITING" });
+    setUpdateReady(false);
+    // 兜底：部分浏览器 controllerchange 触发较慢
+    window.setTimeout(() => {
+      if (reloadingRef.current) window.location.reload();
+    }, 1500);
+  }, []);
+
   const showStatus =
     !browserOnline ||
     host.connection === "offline" ||
     host.connection === "incompatible";
 
-  if (!showStatus && !showInstall) return null;
+  if (!showStatus && !showInstall && !updateReady) return null;
 
   return (
     <>
@@ -142,10 +211,25 @@ export default function PWAProvider() {
         </div>
       )}
 
-      {showInstall && (
+      {updateReady && (
         <div
-          className="fixed right-3 bottom-3 z-[10001] flex items-center gap-2 rounded-xl border border-warm/25 bg-[#0a0908]/95 px-3 py-2 shadow-2xl backdrop-blur-xl animate-fade-in-up"
+          className="fixed left-1/2 top-14 z-[10001] flex -translate-x-1/2 items-center gap-2 rounded-xl border border-warm/25 bg-[#0a0908]/95 px-3 py-2 shadow-2xl backdrop-blur-xl animate-fade-in-up"
+          role="status"
         >
+          <RefreshCw size={14} className="text-warm-primary" />
+          <span className="text-[10px] text-white/70">新版本已就绪</span>
+          <button
+            type="button"
+            onClick={applyUpdate}
+            className="rounded-full border border-warm/30 bg-warm/10 px-2.5 py-1 text-[10px] text-warm-primary transition-colors hover:bg-warm/20"
+          >
+            刷新
+          </button>
+        </div>
+      )}
+
+      {showInstall && (
+        <div className="fixed right-3 bottom-3 z-[10001] flex items-center gap-2 rounded-xl border border-warm/25 bg-[#0a0908]/95 px-3 py-2 shadow-2xl backdrop-blur-xl animate-fade-in-up">
           <Download size={16} className="text-warm-primary" />
           <div className="min-w-0">
             <p className="text-[10px] font-medium text-white">可安装为应用</p>
@@ -176,4 +260,3 @@ export default function PWAProvider() {
     </>
   );
 }
-

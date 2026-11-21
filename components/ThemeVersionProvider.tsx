@@ -11,6 +11,7 @@
 import { useEffect } from "react";
 import type { GalleryVersion } from "@/lib/version-store";
 import { applyThemeToDOM, useVersion } from "@/lib/version-store";
+import { syncSpaceMode } from "@/lib/media-space/store";
 
 export default function ThemeVersionProvider() {
   const version = useVersion();
@@ -44,6 +45,11 @@ export default function ThemeVersionProvider() {
     version.breakpointOverride,
     version.reducedMotion,
   ]);
+
+  // 布局以设计系统为唯一事实源：版本切换后同步媒体空间模式
+  useEffect(() => {
+    syncSpaceMode(version.layout);
+  }, [version.layout]);
 
   return null;
 }

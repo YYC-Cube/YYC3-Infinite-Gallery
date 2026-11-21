@@ -28,6 +28,9 @@ function restore(): string[] {
 let favorites: string[] = restore();
 let persistTimer: number | null = null;
 
+/** 服务端与首次水合固定返回空收藏，避免图标状态不一致 */
+const SERVER_FAVORITES: string[] = [];
+
 function persist() {
   if (typeof window === "undefined") return;
   if (persistTimer) window.clearTimeout(persistTimer);
@@ -60,7 +63,7 @@ export function useFavorites(): string[] {
   return useSyncExternalStore(
     subscribeFavorites,
     getFavoritesSnapshot,
-    getFavoritesSnapshot,
+    () => SERVER_FAVORITES,
   );
 }
 

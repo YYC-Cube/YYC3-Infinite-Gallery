@@ -14,13 +14,14 @@ import {
   ChevronDown,
   ChevronUp,
   Disc3,
-  Expand,
   GripVertical,
   Heart,
   ListMusic,
   Maximize2,
   Minimize2,
+  Minus,
   Music2,
+  Palette,
   Pause,
   PictureInPicture2,
   Play,
@@ -64,7 +65,7 @@ interface SessionWindowProps {
   mode: "unified" | "split";
   config: GalleryConfig;
   canRemove: boolean;
-  onUpload: (sessionId: string, files: FileList) => void;
+  onUpload: (sessionId: string, files: FileList) => Promise<void> | void;
 }
 
 const MIN_W = 280;
@@ -103,6 +104,10 @@ export default function SessionWindow({
   const restoredTimeRef = useRef(false);
   const pinchVolumeRef = useRef(session.volume);
   const [showQueue, setShowQueue] = useState(false);
+  const [windowMode, setWindowMode] = useState<
+    "normal" | "minimized" | "maximized"
+  >("normal");
+  const [uploading, setUploading] = useState(false);
   const [gestureTip, setGestureTip] = useState("");
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
   const favorites = useFavorites();
@@ -236,6 +241,7 @@ export default function SessionWindow({
     focusSession(session.id);
     if (
       mode !== "split" ||
+      windowMode !== "normal" ||
       (event.target as HTMLElement).closest("button,select,input")
     ) {
       return;
@@ -265,7 +271,7 @@ export default function SessionWindow({
   };
 
   const onResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (mode !== "split") return;
+    if (mode !== "split" || windowMode !== "normal") return;
     event.stopPropagation();
     resizeRef.current = {
       sx: event.clientX,
@@ -302,8 +308,12 @@ export default function SessionWindow({
   };
 
   const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files.length > 0) {
-      onUpload(session.id, event.target.files);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      setUploading(true);
+      void Promise.resolve(onUpload(session.id, files)).finally(() =>
+        setUploading(false),
+      );
     }
     event.target.value = "";
   };
@@ -326,7 +336,10 @@ export default function SessionWindow({
 
   const activeTrack = track;
   const isVideo = session.kind === "video";
-  const frameStyle =
+  const isMinimized = windowMode === "minimized";
+  const isMaximized = windowMode === "maximized";
+
+  const normalFrameStyle =
     mode === "split"
       ? {
           position: "fixed" as const,
@@ -338,15 +351,38 @@ export default function SessionWindow({
         }
       : undefined;
 
+  const windowStyle = isMaximized
+    ? {
+        position: "fixed" as const,
+        top: "max(12px, env(safe-area-inset-top))",
+        right: 12,
+        bottom: 12,
+        left: 12,
+        zIndex: 9600,
+      }
+    : isMinimized
+      ? {
+          position: "fixed" as const,
+          left: displayFrame.x,
+          top: displayFrame.y,
+          width: Math.min(320, maxWidth),
+          height: 48,
+          zIndex: displayFrame.z + 200,
+        }
+      : normalFrameStyle;
+
   return (
     <section
-      style={frameStyle}
+      style={windowStyle}
       data-session-kind={session.kind}
+      data-window-mode={windowMode}
       data-skin={session.skin}
       data-orientation={isVideo ? session.orientation : undefined}
       className={`media-session group/session flex min-h-0 min-w-0 flex-col overflow-hidden border border-warm/20 bg-[#090807]/90 shadow-2xl backdrop-blur-xl ${
-        mode === "unified" ? "relative h-full w-full rounded-xl" : "rounded-2xl"
-      }`}
+        mode === "unified" && !isMaximized && !isMinimized
+          ? "relative h-full w-full rounded-xl"
+          : "rounded-2xl"
+      } ${isMinimized ? "!h-12" : ""}`}
       onPointerDown={() => focusSession(session.id)}
       aria-label={`${session.label}，${activeTrack?.title ?? "暂无媒体"}`}
     >
@@ -373,8 +409,12 @@ export default function SessionWindow({
         onPointerMove={onHeaderPointerMove}
         onPointerUp={endHeaderDrag}
         onPointerCancel={endHeaderDrag}
+        onDoubleClick={(event) => {
+          if ((event.target as HTMLElement).closest("button")) return;
+          setWindowMode(isMaximized ? "normal" : "maximized");
+        }}
         className={`relative z-10 flex h-10 shrink-0 items-center gap-2 border-b border-warm/15 px-2.5 ${
-          mode === "split"
+          mode === "split" && windowMode === "normal"
             ? "cursor-grab touch-none active:cursor-grabbing"
             : ""
         }`}
@@ -392,7 +432,7 @@ export default function SessionWindow({
           />
         )}
         <span className="min-w-0 flex-1 truncate font-mono text-[10px] tracking-[0.18em] text-white/60">
-          {session.label}
+          {isMinimized ? (activeTrack?.title ?? session.label) : session.label}
         </span>
         {isVideo && (
           <span className="rounded-full border border-warm/20 px-1.5 py-0.5 text-[8px] text-white/35">
@@ -402,6 +442,17 @@ export default function SessionWindow({
         <span className="hidden text-[8px] text-white/25 sm:inline">
           {isVideo ? "ArtPlayer" : "Hi-Fi"}
         </span>
+        {isMinimized && (
+          <button
+            type="button"
+            onClick={() => toggleSessionPlaying(session.id)}
+            className="rounded-md p-1 text-warm-primary transition-colors hover:text-white"
+            aria-label={session.isPlaying ? "暂停" : "播放"}
+            title={session.isPlaying ? "暂停" : "播放"}
+          >
+            {session.isPlaying ? <Pause size={13} /> : <Play size={13} />}
+          </button>
+        )}
         <button
           type="button"
           onClick={cycleSkin}
@@ -409,7 +460,29 @@ export default function SessionWindow({
           title="切换播放器形态"
           aria-label="切换播放器形态"
         >
-          <Expand size={12} />
+          <Palette size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setWindowMode(isMinimized ? "normal" : "minimized")
+          }
+          className="rounded-md p-1 text-white/40 transition-colors hover:text-warm-primary"
+          title={isMinimized ? "还原窗口" : "最小化"}
+          aria-label={isMinimized ? "还原窗口" : "最小化"}
+        >
+          <Minus size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setWindowMode(isMaximized ? "normal" : "maximized")
+          }
+          className="rounded-md p-1 text-white/40 transition-colors hover:text-warm-primary"
+          title={isMaximized ? "还原窗口" : "最大化"}
+          aria-label={isMaximized ? "还原窗口" : "最大化"}
+        >
+          {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
         </button>
         {canRemove && (
           <button
@@ -424,8 +497,9 @@ export default function SessionWindow({
         )}
       </header>
 
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-2 p-2 sm:p-3">
-        {isVideo ? (
+      {!isMinimized && (
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-2 p-2 sm:p-3">
+          {isVideo ? (
           <div
             {...gesture.handlers}
             className={`media-gesture-surface relative min-h-[80px] flex-1 touch-none overflow-hidden rounded-xl border border-warm/10 bg-black/60 ${
@@ -563,7 +637,7 @@ export default function SessionWindow({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => toggleShuffle(session.id)}
@@ -620,7 +694,18 @@ export default function SessionWindow({
           >
             <Repeat size={12} />
           </button>
-          <div className="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="ml-auto flex items-center gap-1 rounded-full border border-warm/25 bg-black/30 px-2 py-1 text-[9px] text-white/55 transition-colors hover:border-warm/50 hover:text-warm-primary disabled:opacity-50"
+            aria-label={`上传本地${isVideo ? "视频" : "音频"}`}
+            title={`上传本地${isVideo ? "视频" : "音频"}（单个 ≤200MB）`}
+          >
+            <Upload size={11} />
+            {uploading ? "上传中" : "上传"}
+          </button>
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setSessionMuted(session.id, !session.muted)}
@@ -672,15 +757,6 @@ export default function SessionWindow({
                 </button>
               </>
             )}
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="text-white/40 transition-colors hover:text-warm-primary"
-              aria-label="添加本地媒体"
-              title="添加本地媒体"
-            >
-              <Upload size={13} />
-            </button>
           </div>
         </div>
 
@@ -714,9 +790,10 @@ export default function SessionWindow({
             ))}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
-      {mode === "split" && (
+      {mode === "split" && !isMinimized && !isMaximized && (
         <div
           onPointerDown={onResizePointerDown}
           onPointerMove={onResizePointerMove}
@@ -738,16 +815,11 @@ export default function SessionWindow({
         className="hidden"
         onChange={handleUpload}
       />
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        className="absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-full border border-warm/20 bg-black/50 px-2.5 py-1 text-[9px] text-white/45 opacity-0 backdrop-blur-md transition-opacity hover:text-warm-primary group-hover/session:opacity-100"
-      >
-        <Upload size={10} /> 本地
-      </button>
-      <span className="pointer-events-none absolute bottom-3 right-10 z-10 hidden items-center gap-1 text-[8px] font-mono text-white/20 sm:flex">
-        <ListMusic size={9} /> {session.queue.length}
-      </span>
+      {!isMinimized && (
+        <span className="pointer-events-none absolute bottom-3 right-10 z-10 hidden items-center gap-1 text-[8px] font-mono text-white/20 sm:flex">
+          <ListMusic size={9} /> {session.queue.length}
+        </span>
+      )}
     </section>
   );
 }

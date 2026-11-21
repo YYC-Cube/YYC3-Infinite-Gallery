@@ -27,6 +27,19 @@ const config = {
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
   },
+  // 覆盖率仅统计 lib 状态层（组件与 Hook 尚未纳入测试，避免虚高口径）
+  collectCoverageFrom: [
+    "lib/**/*.{ts,tsx}",
+    "!lib/**/__tests__/**",
+  ],
+  coverageThreshold: {
+    global: {
+      statements: 90,
+      branches: 70,
+      functions: 88,
+      lines: 95,
+    },
+  },
 };
 
 export default config;

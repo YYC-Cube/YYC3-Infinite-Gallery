@@ -129,13 +129,16 @@ function WidgetCard({
   const y = clamp(widget.y, 8, Math.max(8, viewport.height - height - 8));
 
   useEffect(() => {
+    // 仅时间/日历需要周期刷新：时钟每秒，日历每分钟
+    if (widget.kind !== "clock" && widget.kind !== "calendar") return;
     const tick = () => setNow(new Date());
     tick();
+    const interval = widget.kind === "clock" ? 1000 : 60_000;
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") tick();
-    }, 1000);
+    }, interval);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [widget.kind]);
 
   const onDragStart = (event: ReactPointerEvent<HTMLDivElement>) => {
     focusWidget(widget.id);
@@ -486,7 +489,11 @@ function WeatherContent() {
       };
       setWeather(next);
       setStatus("fresh");
-      window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(next));
+      try {
+        window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(next));
+      } catch {
+        /* 缓存写入失败不影响在线天气展示 */
+      }
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
       setStatus("offline");
@@ -499,6 +506,7 @@ function WeatherContent() {
       if (cached) {
         const parsed = JSON.parse(cached) as WeatherData;
         if (Number.isFinite(parsed.temperature)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- 一次性读取离线天气缓存
           setWeather(parsed);
           setStatus("cached");
         }

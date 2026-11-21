@@ -1,10 +1,53 @@
 "use client";
 
 import React, { useRef, useCallback, useEffect, useState } from "react";
+import {
+  Image as ImageIcon,
+  Languages,
+  LayoutGrid,
+  Minus,
+  Palette,
+  Puzzle,
+  Type,
+} from "lucide-react";
 import WidgetSettings from "@/components/widgets/WidgetSettings";
 import { removeBackgroundAsset, storeBackgroundAsset } from "@/lib/asset-store";
 import type { GalleryConfig } from "@/lib/config-store";
-import { saveConfig, resetConfig, applyConfigToDOM } from "@/lib/config-store";
+import { saveConfig, applyConfigToDOM } from "@/lib/config-store";
+import {
+  getThemeDefinition,
+  resetBreakpoint,
+  setBreakpoint,
+  setLayout,
+  setReducedMotion,
+  setTheme,
+  THEME_DEFINITIONS,
+  useVersion,
+  type BreakpointVersion,
+  type LayoutVersion,
+} from "@/lib/version-store";
+import { LOCALES, setLocale, t, useLocale } from "@/lib/i18n";
+
+const AMBIENT_KEYS = [
+  "ambientTopColor",
+  "ambientLeftColor",
+  "ambientRightColor",
+  "ambientCenterColor",
+] as const;
+
+type SettingsTab = "theme" | "appearance" | "text" | "widgets" | "language";
+
+const SETTINGS_TABS: {
+  id: SettingsTab;
+  label: string;
+  Icon: React.ComponentType<{ size?: number }>;
+}[] = [
+  { id: "theme", label: "主题", Icon: Palette },
+  { id: "appearance", label: "外观", Icon: ImageIcon },
+  { id: "text", label: "文字", Icon: Type },
+  { id: "widgets", label: "组件", Icon: Puzzle },
+  { id: "language", label: "语言", Icon: Languages },
+];
 
 interface ConfigPanelProps {
   config: GalleryConfig;
@@ -21,20 +64,144 @@ export default function ConfigPanel({
 }: ConfigPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const playerFileInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const onToggleRef = useRef(onToggle);
   const [uploadError, setUploadError] = useState("");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
+  const version = useVersion();
+  const locale = useLocale();
+  const themeDefinition = getThemeDefinition(version.theme);
+  const overrides = config.visualOverrides;
+
+  // 显示值：未覆盖时展示当前主题色，避免面板与页面实际效果不一致
+  const themeGlow = Number(themeDefinition.colors["--glow-intensity"]);
+  const displayGlow =
+    overrides.glow || !Number.isFinite(themeGlow)
+      ? config.glowIntensity
+      : themeGlow;
+  const displayWarmPrimary = overrides.warmPrimary
+    ? config.warmPrimaryColor
+    : (themeDefinition.colors["--warm-primary"] ?? config.warmPrimaryColor);
+  const displayAmbient = (key: string, fallback: string) =>
+    overrides.ambient
+      ? fallback
+      : (themeDefinition.colors[key] ?? fallback);
+  const displayBorder = overrides.border
+    ? config.borderChroma
+    : (themeDefinition.colors["--border-chroma"] ?? config.borderChroma);
 
   useEffect(() => {
     applyConfigToDOM(config);
   }, [config]);
 
+  useEffect(() => {
+    onToggleRef.current = onToggle;
+  }, [onToggle]);
+
+  // 对话框语义：Esc 关闭、焦点陷阱、打开时锁定页面滚动并聚焦首个控件
+  useEffect(() => {
+    if (!isOpen) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const getFocusable = () =>
+      Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.getClientRects().length > 0);
+
+    const first = getFocusable()[0];
+    (first ?? panel).focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onToggleRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = getFocusable();
+      if (focusable.length === 0) return;
+      const firstItem = focusable[0];
+      const lastItem = focusable[focusable.length - 1];
+      if (!firstItem || !lastItem) return;
+      if (event.shiftKey && document.activeElement === firstItem) {
+        event.preventDefault();
+        lastItem.focus();
+      } else if (!event.shiftKey && document.activeElement === lastItem) {
+        event.preventDefault();
+        firstItem.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus?.();
+    };
+  }, [isOpen]);
+
   const updateConfig = useCallback(
     (partial: Partial<GalleryConfig>) => {
-      const newConfig = { ...config, ...partial };
+      const nextOverrides = partial.visualOverrides
+        ? partial.visualOverrides
+        : { ...config.visualOverrides };
+
+      // 用户一旦修改配色/光效，即视为显式覆盖主题
+      if (!partial.visualOverrides) {
+        if ("warmPrimaryColor" in partial) nextOverrides.warmPrimary = true;
+        if (AMBIENT_KEYS.some((key) => key in partial)) {
+          nextOverrides.ambient = true;
+        }
+        if ("glowIntensity" in partial) nextOverrides.glow = true;
+        if ("borderChroma" in partial) nextOverrides.border = true;
+      }
+
+      const newConfig: GalleryConfig = {
+        ...config,
+        ...partial,
+        visualOverrides: nextOverrides,
+      };
       onConfigChange(newConfig);
       saveConfig(newConfig);
     },
     [config, onConfigChange],
   );
+
+  const followCurrentTheme = useCallback(() => {
+    const definition = getThemeDefinition(version.theme);
+    const glow = Number(definition.colors["--glow-intensity"]);
+    const next: GalleryConfig = {
+      ...config,
+      warmPrimaryColor:
+        definition.colors["--warm-primary"] ?? config.warmPrimaryColor,
+      ambientTopColor:
+        definition.colors["--ambient-top"] ?? config.ambientTopColor,
+      ambientLeftColor:
+        definition.colors["--ambient-left"] ?? config.ambientLeftColor,
+      ambientRightColor:
+        definition.colors["--ambient-right"] ?? config.ambientRightColor,
+      ambientCenterColor:
+        definition.colors["--ambient-center"] ?? config.ambientCenterColor,
+      glowIntensity: Number.isFinite(glow) ? glow : config.glowIntensity,
+      borderChroma:
+        definition.colors["--border-chroma"] ?? config.borderChroma,
+      visualOverrides: {
+        warmPrimary: false,
+        ambient: false,
+        glow: false,
+        border: false,
+      },
+    };
+    onConfigChange(next);
+    saveConfig(next);
+  }, [config, onConfigChange, version.theme]);
 
   const readImage = useCallback(
     async (
@@ -58,21 +225,31 @@ export default function ConfigPanel({
         reader.readAsDataURL(file);
       });
 
+      const previousId =
+        key === "playerBackgroundImage"
+          ? config.playerBackgroundAssetId
+          : config.backgroundAssetId;
+      const assetId = await storeBackgroundAsset(file);
+      if (!assetId) {
+        setUploadError("背景图保存失败，请换一张更小的图片后重试");
+        return;
+      }
       if (key === "playerBackgroundImage") {
-        const previousId = config.playerBackgroundAssetId;
-        const assetId = await storeBackgroundAsset(file);
         updateConfig({
           playerBackgroundAssetId: assetId,
           playerBackgroundImage: preview,
         });
-        if (previousId && previousId !== assetId) {
-          void removeBackgroundAsset(previousId);
-        }
       } else {
-        updateConfig({ [key]: preview });
+        updateConfig({
+          backgroundAssetId: assetId,
+          backgroundImage: preview,
+        });
+      }
+      if (previousId && previousId !== assetId) {
+        void removeBackgroundAsset(previousId);
       }
     },
-    [config.playerBackgroundAssetId, updateConfig],
+    [config.backgroundAssetId, config.playerBackgroundAssetId, updateConfig],
   );
 
   const handleImageUpload = useCallback(
@@ -91,30 +268,28 @@ export default function ConfigPanel({
     [readImage],
   );
 
-  const handleReset = useCallback(() => {
-    const defaultConfig = resetConfig();
-    onConfigChange(defaultConfig);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  }, [onConfigChange]);
-
   if (!isOpen) return null;
 
   return (
     <>
       {/* 遮罩层 */}
       <div
+        aria-hidden
         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] transition-opacity"
         onClick={onToggle}
       />
 
       {/* 配置面板主体 */}
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="design-studio-title"
+        tabIndex={-1}
         className="fixed right-0 top-0 bottom-0 w-full max-w-md 
                           bg-[#0a0908]/95 config-panel-backdrop z-[9999] 
                           overflow-y-auto border-l border-warm/20
-                          shadow-2xl animate-fade-in-up"
+                          shadow-2xl animate-fade-in-up outline-none"
       >
         {/* 头部 */}
         <div
@@ -123,6 +298,7 @@ export default function ConfigPanel({
         >
           <div className="flex items-center justify-between mb-4">
             <h2
+              id="design-studio-title"
               className="font-[family-name:var(--font-cormorant)] 
                                      text-xl italic text-gradient font-light"
             >
@@ -133,21 +309,216 @@ export default function ConfigPanel({
               className="w-8 h-8 rounded-full glass-effect 
                                        flex items-center justify-center
                                        text-white/60 hover:text-white transition-colors"
-              aria-label="关闭面板"
+              aria-label="收起设置面板"
+              title="收起设置"
             >
-              ✕
+              <Minus size={14} />
             </button>
           </div>
           <p className="text-xs text-white/40 tracking-wider">
-            温润艺术风 · 自定义配置中心
+            {themeDefinition.name} · 设置与主题工作台
           </p>
+
+          <div
+            role="tablist"
+            aria-label="设置分类"
+            className="mt-4 flex gap-1 overflow-x-auto"
+          >
+            {SETTINGS_TABS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === id}
+                onClick={() => setActiveTab(id)}
+                className={`flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[10px] transition-colors ${
+                  activeTab === id
+                    ? "border-warm/40 bg-warm/20 text-warm-primary"
+                    : "border-transparent text-white/40 hover:text-white/70"
+                }`}
+              >
+                <Icon size={12} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="p-6 space-y-8">
+        <div className="p-6 space-y-8" data-settings-tab={activeTab}>
+          {/* ========================================
+					    0. 主题系统
+					   ======================================== */}
+          <section data-section="theme">
+            <h3 className="text-sm font-mono tracking-[0.2em] text-warm-primary mb-4 uppercase">
+              Theme System
+            </h3>
+
+            <div
+              className="mb-4 overflow-hidden rounded-2xl border border-warm/20"
+              style={{ background: themeDefinition.colors["--background"] }}
+            >
+              <div className="flex items-center justify-between px-4 pt-4">
+                <span
+                  className="font-[family-name:var(--font-cormorant)] text-sm italic"
+                  style={{ color: themeDefinition.colors["--foreground"] }}
+                >
+                  言启象限 · 语枢未来
+                </span>
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{
+                    background: themeDefinition.colors["--warm-primary"],
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex gap-1.5 px-4">
+                {["--warm-primary", "--warm-secondary", "--warm-accent"].map(
+                  (key) => (
+                    <span
+                      key={key}
+                      className="h-1.5 flex-1 rounded-full"
+                      style={{ background: themeDefinition.colors[key] }}
+                    />
+                  ),
+                )}
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-white/10 px-4 py-3">
+                <span
+                  className="text-[9px] font-mono tracking-widest"
+                  style={{ color: themeDefinition.colors["--text-muted"] }}
+                >
+                  {themeDefinition.id.toUpperCase()}
+                </span>
+                <span
+                  className="text-[9px] font-mono"
+                  style={{ color: themeDefinition.colors["--warm-primary"] }}
+                >
+                  LIVE PREVIEW
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {THEME_DEFINITIONS.map((theme) => {
+                const active = version.theme === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => setTheme(theme.id)}
+                    aria-label={`切换到 ${theme.name}`}
+                    aria-pressed={active}
+                    className={`rounded-xl border p-2.5 text-left transition-all ${
+                      active
+                        ? "border-warm/50 bg-warm/15"
+                        : "border-warm/15 bg-black/20 hover:border-warm/30"
+                    }`}
+                  >
+                    <div className="flex gap-1">
+                      <span
+                        className="h-3 w-3 rounded-full border border-white/10"
+                        style={{ background: theme.colors["--warm-primary"] }}
+                      />
+                      <span
+                        className="h-3 w-3 rounded-full border border-white/10"
+                        style={{ background: theme.colors["--warm-accent"] }}
+                      />
+                      <span
+                        className="h-3 w-3 rounded-full border border-white/10"
+                        style={{ background: theme.colors["--background"] }}
+                      />
+                    </div>
+                    <p className="mt-2 text-[10px] text-white/75">{theme.name}</p>
+                    <p className="mt-0.5 line-clamp-2 text-[8px] leading-relaxed text-white/35">
+                      {theme.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5">
+              <div className="mb-1.5 flex items-center gap-2">
+                <LayoutGrid size={12} className="text-warm-primary/50" />
+                <span className="text-[10px] text-white/60">布局模式</span>
+              </div>
+              <div className="flex gap-1.5">
+                {(["split", "unified"] as LayoutVersion[]).map((layout) => (
+                  <button
+                    key={layout}
+                    type="button"
+                    onClick={() => setLayout(layout)}
+                    title={
+                      layout === "split" ? "独立窗口布局" : "统一界面布局"
+                    }
+                    className={`flex-1 rounded-lg border py-1.5 text-[10px] font-mono transition-all ${
+                      version.layout === layout
+                        ? "border-warm/40 bg-warm/20 text-warm-primary"
+                        : "border-warm/15 bg-black/30 text-white/40 hover:border-warm/30"
+                    }`}
+                  >
+                    {layout === "split" ? "拆分" : "统一"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-1.5 flex items-center gap-2">
+                <Type size={12} className="text-warm-primary/50" />
+                <span className="text-[10px] text-white/60">断点版本</span>
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={resetBreakpoint}
+                  aria-label="自动断点模式"
+                  className={`flex-1 rounded-lg border py-1.5 text-[10px] font-mono transition-all ${
+                    !version.breakpointOverride
+                      ? "border-warm/40 bg-warm/20 text-warm-primary"
+                      : "border-warm/15 bg-black/30 text-white/40 hover:border-warm/30"
+                  }`}
+                >
+                  自动
+                </button>
+                {(
+                  [
+                    { id: "desktop", label: "桌面" },
+                    { id: "tablet", label: "平板" },
+                    { id: "mobile", label: "移动" },
+                  ] as { id: BreakpointVersion; label: string }[]
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setBreakpoint(item.id)}
+                    title={`${item.label}版`}
+                    className={`flex-1 rounded-lg border py-1.5 text-[10px] font-mono transition-all ${
+                      version.breakpointOverride &&
+                      version.breakpoint === item.id
+                        ? "border-warm/40 bg-warm/20 text-warm-primary"
+                        : "border-warm/15 bg-black/30 text-white/40 hover:border-warm/30"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <ToggleControl
+                label="减少动效"
+                enabled={version.reducedMotion}
+                onToggle={setReducedMotion}
+              />
+            </div>
+          </section>
+
           {/* ========================================
 					    1. 背景素材上传
 					   ======================================== */}
-          <section>
+          <section data-section="appearance">
             <h3
               className="text-sm font-mono tracking-[0.2em] 
                                      text-warm-primary mb-4 uppercase"
@@ -156,9 +527,11 @@ export default function ConfigPanel({
             </h3>
 
             {/* 上传按钮 */}
-            <div
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-warm/30 rounded-xl p-8 
+              aria-label="上传页面背景图"
+              className="block w-full border-2 border-dashed border-warm/30 rounded-xl p-8 
                                    text-center cursor-pointer hover:border-warm/50 
                                    transition-all duration-300 group
                                    bg-warm/5 hover:bg-warm/10"
@@ -197,7 +570,7 @@ export default function ConfigPanel({
                   </p>
                 </div>
               )}
-            </div>
+            </button>
 
             <input
               ref={fileInputRef}
@@ -238,7 +611,14 @@ export default function ConfigPanel({
                   onChange={(v) => updateConfig({ backgroundPosition: v })}
                 />
                 <button
-                  onClick={() => updateConfig({ backgroundImage: null })}
+                  onClick={() => {
+                    const assetId = config.backgroundAssetId;
+                    updateConfig({
+                      backgroundImage: null,
+                      backgroundAssetId: null,
+                    });
+                    if (assetId) void removeBackgroundAsset(assetId);
+                  }}
                   className="text-xs text-red-400/70 hover:text-red-400 
                                                transition-colors mt-2"
                 >
@@ -251,7 +631,7 @@ export default function ConfigPanel({
           {/* ========================================
 					    2. 媒体空间背景
 					   ======================================== */}
-          <section>
+          <section data-section="appearance">
             <h3
               className="text-sm font-mono tracking-[0.2em] 
                                      text-warm-primary mb-4 uppercase"
@@ -259,9 +639,11 @@ export default function ConfigPanel({
               Media Space Canvas
             </h3>
 
-            <div
+            <button
+              type="button"
               onClick={() => playerFileInputRef.current?.click()}
-              className="border border-warm/20 rounded-xl p-4 cursor-pointer 
+              aria-label="上传媒体空间背景图"
+              className="block w-full border border-warm/20 rounded-xl p-4 cursor-pointer 
                                    hover:border-warm/40 transition-all duration-300
                                    bg-black/20 hover:bg-warm/5"
             >
@@ -287,7 +669,7 @@ export default function ConfigPanel({
                   </div>
                 </div>
               )}
-            </div>
+            </button>
             <input
               ref={playerFileInputRef}
               type="file"
@@ -297,7 +679,9 @@ export default function ConfigPanel({
             />
 
             {uploadError && (
-              <p className="text-[10px] text-red-300/80 mt-2">{uploadError}</p>
+              <p role="alert" className="text-[10px] text-red-300/80 mt-2">
+                {uploadError}
+              </p>
             )}
 
             {config.playerBackgroundImage && (
@@ -339,7 +723,7 @@ export default function ConfigPanel({
           {/* ========================================
 					    3. 视觉风格
 					   ======================================== */}
-          <section>
+          <section data-section="appearance">
             <h3
               className="text-sm font-mono tracking-[0.2em] 
                                      text-warm-primary mb-4 uppercase"
@@ -347,10 +731,28 @@ export default function ConfigPanel({
               Visual Style
             </h3>
 
+            <div className="mb-4 flex items-center justify-between gap-2 rounded-lg border border-warm/15 bg-black/20 px-3 py-2">
+              <span className="text-[10px] text-white/45">
+                {overrides.warmPrimary ||
+                overrides.ambient ||
+                overrides.glow ||
+                overrides.border
+                  ? "当前：自定义视觉参数"
+                  : "当前：跟随主题配色"}
+              </span>
+              <button
+                type="button"
+                onClick={followCurrentTheme}
+                className="rounded-full border border-warm/30 px-2.5 py-1 text-[10px] text-warm-primary transition-colors hover:bg-warm/10"
+              >
+                跟随当前主题
+              </button>
+            </div>
+
             <div className="space-y-4">
               <SliderControl
                 label="光效强度"
-                value={config.glowIntensity}
+                value={displayGlow}
                 min={0}
                 max={2}
                 step={0.1}
@@ -369,36 +771,39 @@ export default function ConfigPanel({
 
               <ColorPickerControl
                 label="顶部光晕色"
-                value={config.ambientTopColor}
+                value={displayAmbient("--ambient-top", config.ambientTopColor)}
                 onChange={(v) => updateConfig({ ambientTopColor: v })}
               />
 
               <ColorPickerControl
                 label="左侧光晕色"
-                value={config.ambientLeftColor}
+                value={displayAmbient("--ambient-left", config.ambientLeftColor)}
                 onChange={(v) => updateConfig({ ambientLeftColor: v })}
               />
 
               <ColorPickerControl
                 label="右侧光晕色"
-                value={config.ambientRightColor}
+                value={displayAmbient("--ambient-right", config.ambientRightColor)}
                 onChange={(v) => updateConfig({ ambientRightColor: v })}
               />
 
               <ColorPickerControl
                 label="中心光晕色"
-                value={config.ambientCenterColor}
+                value={displayAmbient(
+                  "--ambient-center",
+                  config.ambientCenterColor,
+                )}
                 onChange={(v) => updateConfig({ ambientCenterColor: v })}
               />
 
               <ColorPickerControl
                 label="主色调"
-                value={config.warmPrimaryColor}
+                value={displayWarmPrimary}
                 onChange={(v) => updateConfig({ warmPrimaryColor: v })}
               />
 
               <BorderChromaControl
-                value={config.borderChroma}
+                value={displayBorder}
                 onChange={(v) => updateConfig({ borderChroma: v })}
               />
 
@@ -423,13 +828,52 @@ export default function ConfigPanel({
           {/* ========================================
 					    3. 排版细节
 					   ======================================== */}
-          <section>
+          <section data-section="text">
             <h3
               className="text-sm font-mono tracking-[0.2em] 
                                      text-warm-primary mb-4 uppercase"
             >
               Typography
             </h3>
+
+            <div className="mb-4 space-y-3 rounded-xl border border-warm/15 bg-black/20 p-3">
+              <p className="text-[10px] font-mono tracking-widest text-white/45">
+                BRAND TEXT
+              </p>
+              <label className="block">
+                <span className="mb-1 block text-[10px] text-white/40">
+                  主标语
+                </span>
+                <input
+                  type="text"
+                  value={config.brandLine1}
+                  onChange={(event) =>
+                    updateConfig({ brandLine1: event.target.value })
+                  }
+                  maxLength={50}
+                  placeholder={t("brand.line1", locale)}
+                  className="w-full rounded-lg border border-warm/20 bg-black/25 px-3 py-2 text-xs text-white/75 outline-none transition-colors placeholder:text-white/20 focus:border-warm/50"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] text-white/40">
+                  副标语
+                </span>
+                <input
+                  type="text"
+                  value={config.brandLine2}
+                  onChange={(event) =>
+                    updateConfig({ brandLine2: event.target.value })
+                  }
+                  maxLength={100}
+                  placeholder={t("brand.line2", locale)}
+                  className="w-full rounded-lg border border-warm/20 bg-black/25 px-3 py-2 text-xs text-white/75 outline-none transition-colors placeholder:text-white/20 focus:border-warm/50"
+                />
+              </label>
+              <p className="text-[9px] text-white/25">
+                留空时跟随当前语言文案，修改后立即应用到页面页脚。
+              </p>
+            </div>
 
             <div className="space-y-4">
               <SelectControl
@@ -480,7 +924,7 @@ export default function ConfigPanel({
           {/* ========================================
 					    4. 动效参数
 					   ======================================== */}
-          <section>
+          <section data-section="text">
             <h3
               className="text-sm font-mono tracking-[0.2em] 
                                      text-warm-primary mb-4 uppercase"
@@ -548,7 +992,7 @@ export default function ConfigPanel({
           {/* ========================================
 					    5. 布局结构
 					   ======================================== */}
-          <section>
+          <section data-section="text">
             <h3
               className="text-sm font-mono tracking-[0.2em] 
                                      text-warm-primary mb-4 uppercase"
@@ -588,7 +1032,7 @@ export default function ConfigPanel({
           {/* ========================================
 					    6. 页面小组件
 					   ======================================== */}
-          <section>
+          <section data-section="widgets">
             <h3
               className="text-sm font-mono tracking-[0.2em] 
                                      text-warm-primary mb-4 uppercase"
@@ -598,23 +1042,42 @@ export default function ConfigPanel({
             <WidgetSettings />
           </section>
 
-          {/* 操作按钮 */}
-          <div className="pt-6 border-t border-warm/10 space-y-3">
-            <button
-              onClick={handleReset}
-              className="w-full py-3 px-4 rounded-xl glass-effect 
-                                   text-sm text-white/70 hover:text-white 
-                                   transition-all duration-300 
-                                   hover:border-red-400/30 hover:text-red-400/80
-                                   tracking-wider"
-            >
-              ↻ 重置为默认设置
-            </button>
-
-            <p className="text-xs text-center text-white/20 pt-2">
-              所有更改自动保存到本地存储
+          {/* ========================================
+					    7. 语言
+					   ======================================== */}
+          <section data-section="language">
+            <h3 className="text-sm font-mono tracking-[0.2em] text-warm-primary mb-4 uppercase">
+              Language
+            </h3>
+            <p className="mb-3 text-[10px] leading-relaxed text-white/35">
+              仅影响界面文案与品牌标语回退内容，不改变作品与本地媒体数据。
             </p>
-          </div>
+            <div className="grid grid-cols-3 gap-2">
+              {LOCALES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setLocale(item.id)}
+                  aria-label={`切换到 ${item.native}`}
+                  aria-pressed={locale === item.id}
+                  className={`rounded-xl border px-2 py-2.5 text-center transition-all ${
+                    locale === item.id
+                      ? "border-warm/40 bg-warm/20 text-warm-primary"
+                      : "border-warm/15 bg-black/20 text-white/55 hover:border-warm/30"
+                  }`}
+                >
+                  <span className="block text-xs">{item.label}</span>
+                  <span className="mt-0.5 block text-[9px] text-white/30">
+                    {item.native}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <p className="text-xs text-center text-white/20 pt-2">
+            所有更改自动保存到本地存储
+          </p>
         </div>
       </div>
     </>

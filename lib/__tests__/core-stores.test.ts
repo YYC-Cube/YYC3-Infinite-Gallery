@@ -24,6 +24,8 @@ import {
   applyConfigToDOM,
   loadConfigFromHost,
   hydratePlayerBackground,
+  hydrateBackgrounds,
+  revokeHydratedBackgroundUrls,
 } from "../config-store";
 import {
   WIDGET_CATALOG,
@@ -80,6 +82,12 @@ describe("config-store", () => {
   test("applyConfigToDOM 应映射全局光效与边线色度变量", () => {
     applyConfigToDOM({
       ...DEFAULT_CONFIG,
+      visualOverrides: {
+        warmPrimary: true,
+        ambient: true,
+        glow: true,
+        border: true,
+      },
       glowRadius: 80,
       ambientCenterColor: "rgba(1, 2, 3, 0.1)",
       borderChroma: "10 20 30",
@@ -92,6 +100,44 @@ describe("config-store", () => {
     );
     expect(root.style.getPropertyValue("--border-chroma")).toBe("10 20 30");
     expect(root.style.getPropertyValue("--glass-blur")).toBe("32px");
+  });
+
+  test("未覆盖主题时 applyConfigToDOM 不应写主题相关内联变量", () => {
+    const root = document.documentElement;
+    root.style.setProperty("--warm-primary", "#old");
+    root.style.setProperty("--ambient-top", "rgba(0,0,0,.1)");
+    root.style.setProperty("--glow-intensity", "2");
+
+    applyConfigToDOM({
+      ...DEFAULT_CONFIG,
+      visualOverrides: {
+        warmPrimary: false,
+        ambient: false,
+        glow: false,
+        border: false,
+      },
+    });
+
+    expect(root.style.getPropertyValue("--warm-primary")).toBe("");
+    expect(root.style.getPropertyValue("--ambient-top")).toBe("");
+    expect(root.style.getPropertyValue("--glow-intensity")).toBe("");
+    // 边线色也由主题提供，未覆盖时不写内联值
+    expect(root.style.getPropertyValue("--border-chroma")).toBe("");
+  });
+
+  test("旧配置缺少 override 标记时应推断为自定义", () => {
+    window.localStorage.setItem(
+      "yyc3-gallery-config",
+      JSON.stringify({
+        warmPrimaryColor: "#123456",
+        glowIntensity: 1.4,
+      }),
+    );
+    const config = loadConfig();
+    expect(config.warmPrimaryColor).toBe("#123456");
+    expect(config.visualOverrides.warmPrimary).toBe(true);
+    expect(config.visualOverrides.glow).toBe(true);
+    expect(config.visualOverrides.ambient).toBe(false);
   });
 
   test("applyConfigToDOM 应根据背景图切换 body class", () => {
@@ -161,6 +207,82 @@ describe("config-store", () => {
       playerBackgroundAssetId: "missing",
     };
     expect(await hydratePlayerBackground(config)).toBe(config);
+  });
+
+  test("saveConfig 有 assetId 时应只持久化引用而不写 DataURL", () => {
+    saveConfig({
+      ...DEFAULT_CONFIG,
+      backgroundAssetId: "page-asset",
+      backgroundImage: "data:image/png;base64,page",
+      playerBackgroundAssetId: "player-asset",
+      playerBackgroundImage: "data:image/png;base64,player",
+    });
+    const stored = JSON.parse(
+      window.localStorage.getItem("yyc3-gallery-config") ?? "{}",
+    ) as Record<string, unknown>;
+    expect(stored.backgroundImage).toBeNull();
+    expect(stored.backgroundAssetId).toBe("page-asset");
+    expect(stored.playerBackgroundImage).toBeNull();
+    expect(stored.playerBackgroundAssetId).toBe("player-asset");
+  });
+
+  test("无 assetId 的旧 DataURL 配置应保留以支持迁移", () => {
+    saveConfig({
+      ...DEFAULT_CONFIG,
+      backgroundAssetId: null,
+      backgroundImage: "data:image/png;base64,legacy",
+    });
+    expect(loadConfig().backgroundImage).toBe("data:image/png;base64,legacy");
+  });
+
+  test("hydrateBackgrounds 应同时恢复页面与播放器背景", async () => {
+    const original = URL.createObjectURL;
+    (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL =
+      jest
+        .fn()
+        .mockReturnValueOnce("blob:page")
+        .mockReturnValueOnce("blob:player");
+    mockLoadBackgroundAsset.mockImplementation(async (id: string) =>
+      id === "missing" ? null : new Blob([id]),
+    );
+    try {
+      const result = await hydrateBackgrounds({
+        ...DEFAULT_CONFIG,
+        backgroundImage: null,
+        backgroundAssetId: "page-asset",
+        playerBackgroundImage: null,
+        playerBackgroundAssetId: "player-asset",
+      });
+      expect(result.backgroundImage).toBe("blob:page");
+      expect(result.playerBackgroundImage).toBe("blob:player");
+      expect(mockLoadBackgroundAsset).toHaveBeenCalledWith("page-asset");
+      expect(mockLoadBackgroundAsset).toHaveBeenCalledWith("player-asset");
+    } finally {
+      (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL =
+        original;
+    }
+  });
+
+  test("revokeHydratedBackgroundUrls 应释放已创建的对象 URL", async () => {
+    const originalCreate = URL.createObjectURL;
+    const revoke = jest.fn();
+    (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL =
+      () => "blob:revoke-test";
+    (URL as unknown as { revokeObjectURL: (url: string) => void }).revokeObjectURL =
+      revoke;
+    mockLoadBackgroundAsset.mockResolvedValue(new Blob(["img"]));
+    try {
+      await hydratePlayerBackground({
+        ...DEFAULT_CONFIG,
+        playerBackgroundImage: null,
+        playerBackgroundAssetId: "revoke-asset",
+      });
+      revokeHydratedBackgroundUrls();
+      expect(revoke).toHaveBeenCalledWith("blob:revoke-test");
+    } finally {
+      (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL =
+        originalCreate;
+    }
   });
 });
 

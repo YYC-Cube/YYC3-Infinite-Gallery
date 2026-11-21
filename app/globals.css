@@ -47,7 +47,13 @@
   --color-foreground: var(--foreground);
   /* 统一边线色：所有 border-warm/<alpha> 均基于该可编辑 RGB 通道 */
   --color-warm: rgb(var(--border-chroma) / <alpha-value>);
-  --font-sans: var(--font-geist-sans);
+  /* 主题强调色：让 text-warm-primary / bg-warm-primary 等工具类真正生效 */
+  --color-warm-primary: var(--warm-primary);
+  --color-warm-secondary: var(--warm-secondary);
+  --color-warm-accent: var(--warm-accent);
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-cormorant);
 }
@@ -320,6 +326,19 @@ body::before {
 .config-panel-backdrop {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+}
+
+/* 设置面板分组：DOM 保持挂载，仅显示当前分类，避免切换时丢失表单状态 */
+[data-settings-tab] > [data-section] {
+  display: none;
+}
+
+[data-settings-tab="theme"] > [data-section="theme"],
+[data-settings-tab="appearance"] > [data-section="appearance"],
+[data-settings-tab="text"] > [data-section="text"],
+[data-settings-tab="widgets"] > [data-section="widgets"],
+[data-settings-tab="language"] > [data-section="language"] {
+  display: block;
 }
 
 .config-slider {
@@ -641,45 +660,11 @@ html[data-breakpoint="mobile"] {
   --gallery-gap: 8px;
 }
 
-/* 布局版本：拆分（split） */
-html[data-layout="split"] .media-space-root {
-  position: fixed !important;
-  top: 18px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  width: min(700px, calc(100vw - 32px)) !important;
-  height: auto !important;
-  max-height: 85vh !important;
-  z-index: 9000 !important;
-  display: block !important;
-}
-
-/* 布局版本：统一（unified） */
-html[data-layout="unified"] .media-space-root {
-  position: fixed !important;
-  inset: 64px 18px 86px !important;
-  z-index: 9000 !important;
-  display: grid !important;
-}
-
-/* 移动端强制统一布局，无论用户如何选择 */
-@media (max-width: 767px) {
-  html[data-layout="split"] .media-space-root {
-    position: fixed !important;
-    inset: 54px 8px 76px !important;
-    width: auto !important;
-    height: auto !important;
-    transform: none !important;
-    left: auto !important;
-    top: auto !important;
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 38px minmax(148px, 0.64fr) minmax(0, 1.36fr);
-    gap: 7px;
-    padding: 0 7px 7px;
-    border-radius: 18px;
-  }
-}
+/*
+ * 媒体空间布局以 data-mode 为唯一事实源：
+ * split 使用 display:contents + 固定窗口；unified 使用固定面板网格。
+ * 设计系统的 data-layout 仅由 ThemeVersionProvider 同步到 store，不再重复写布局样式。
+ */
 
 /* 主题覆盖：深色夜间 */
 html[data-theme="deep-night"] .glass-effect {
@@ -721,37 +706,6 @@ html[data-theme="polar"] .glass-effect {
   backdrop-filter: blur(12px);
 }
 
-/* 浅色主题：版本面板内部使用深色暖色变量，保证对比度 */
-html[data-theme="minimal"] .version-switcher,
-html[data-theme="ink-wash"] .version-switcher,
-html[data-theme="polar"] .version-switcher {
-  --warm-primary: #9a6b3f;
-  --warm-secondary: #7d5a35;
-  --warm-accent: #b8895c;
-}
-
-html[data-theme="minimal"] .version-switcher .glass-effect,
-html[data-theme="ink-wash"] .version-switcher .glass-effect,
-html[data-theme="polar"] .version-switcher .glass-effect {
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(120, 90, 60, 0.2);
-}
-
-html[data-theme="minimal"] .version-switcher .text-white\/60,
-html[data-theme="ink-wash"] .version-switcher .text-white\/60,
-html[data-theme="polar"] .version-switcher .text-white\/60,
-html[data-theme="minimal"] .version-switcher .text-white\/50,
-html[data-theme="ink-wash"] .version-switcher .text-white\/50,
-html[data-theme="polar"] .version-switcher .text-white\/50 {
-  color: rgba(30, 25, 20, 0.7);
-}
-
-html[data-theme="minimal"] .version-switcher button.bg-black\/30,
-html[data-theme="ink-wash"] .version-switcher button.bg-black\/30,
-html[data-theme="polar"] .version-switcher button.bg-black\/30 {
-  background: rgba(255, 255, 255, 0.7);
-}
-
 /* 减少动效全局覆盖 */
 html[data-theme="minimal"] body::before,
 html[data-breakpoint="mobile"][data-reduced-motion="true"] body::before {
@@ -774,11 +728,6 @@ html[data-reduced-motion="true"] ::after {
 /* 防止移动端双击缩放 */
 html {
   touch-action: manipulation;
-}
-
-/* 移动端滚动条隐藏 */
-::-webkit-scrollbar {
-  display: none;
 }
 
 /* 移动端安全区填充 */
