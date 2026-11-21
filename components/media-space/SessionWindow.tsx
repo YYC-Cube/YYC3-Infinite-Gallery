@@ -9,6 +9,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ChangeEvent, PointerEvent as ReactPointerEvent } from "react";
 import {
   ChevronDown,
@@ -53,6 +54,7 @@ import {
   setSessionSkin,
   setSessionTime,
   setSessionVolume,
+  setSessionWindow,
   stepTrack,
   toggleSessionPlaying,
   toggleShuffle,
@@ -90,6 +92,9 @@ export default function SessionWindow({
   onUpload,
 }: SessionWindowProps) {
   const track = getSessionTrack(session);
+  /** 窗口状态统一来自全局 store：normal / minimized / maximized */
+  const windowState = session.windowState;
+  const isMaximized = windowState === "maximized";
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<VideoEngineHandle>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -104,9 +109,6 @@ export default function SessionWindow({
   const restoredTimeRef = useRef(false);
   const pinchVolumeRef = useRef(session.volume);
   const [showQueue, setShowQueue] = useState(false);
-  const [windowMode, setWindowMode] = useState<
-    "normal" | "minimized" | "maximized"
-  >("normal");
   const [uploading, setUploading] = useState(false);
   const [gestureTip, setGestureTip] = useState("");
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
@@ -241,7 +243,7 @@ export default function SessionWindow({
     focusSession(session.id);
     if (
       mode !== "split" ||
-      windowMode !== "normal" ||
+      windowState !== "normal" ||
       (event.target as HTMLElement).closest("button,select,input")
     ) {
       return;
@@ -271,7 +273,7 @@ export default function SessionWindow({
   };
 
   const onResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (mode !== "split" || windowMode !== "normal") return;
+    if (mode !== "split" || windowState !== "normal") return;
     event.stopPropagation();
     resizeRef.current = {
       sx: event.clientX,
@@ -336,8 +338,9 @@ export default function SessionWindow({
 
   const activeTrack = track;
   const isVideo = session.kind === "video";
-  const isMinimized = windowMode === "minimized";
-  const isMaximized = windowMode === "maximized";
+
+  // 最小化容器统一收纳到 MediaSpace 任务坞，此处不再渲染独立窗口体
+  if (windowState === "minimized") return null;
 
   const normalFrameStyle =
     mode === "split"
@@ -356,33 +359,24 @@ export default function SessionWindow({
         position: "fixed" as const,
         top: "max(12px, env(safe-area-inset-top))",
         right: 12,
-        bottom: 12,
+        bottom: "calc(12px + env(safe-area-inset-bottom))",
         left: 12,
         zIndex: 9600,
       }
-    : isMinimized
-      ? {
-          position: "fixed" as const,
-          left: displayFrame.x,
-          top: displayFrame.y,
-          width: Math.min(320, maxWidth),
-          height: 48,
-          zIndex: displayFrame.z + 200,
-        }
-      : normalFrameStyle;
+    : normalFrameStyle;
 
-  return (
+  const section = (
     <section
       style={windowStyle}
       data-session-kind={session.kind}
-      data-window-mode={windowMode}
+      data-window-mode={windowState}
       data-skin={session.skin}
       data-orientation={isVideo ? session.orientation : undefined}
       className={`media-session group/session flex min-h-0 min-w-0 flex-col overflow-hidden border border-warm/20 bg-[#090807]/90 shadow-2xl backdrop-blur-xl ${
-        mode === "unified" && !isMaximized && !isMinimized
+        mode === "unified" && !isMaximized
           ? "relative h-full w-full rounded-xl"
           : "rounded-2xl"
-      } ${isMinimized ? "!h-12" : ""}`}
+      } ${isMaximized ? "border-warm/40 !bg-[#090807]/97" : ""}`}
       onPointerDown={() => focusSession(session.id)}
       aria-label={`${session.label}，${activeTrack?.title ?? "暂无媒体"}`}
     >
@@ -411,10 +405,10 @@ export default function SessionWindow({
         onPointerCancel={endHeaderDrag}
         onDoubleClick={(event) => {
           if ((event.target as HTMLElement).closest("button")) return;
-          setWindowMode(isMaximized ? "normal" : "maximized");
+          setSessionWindow(session.id, isMaximized ? "normal" : "maximized");
         }}
         className={`relative z-10 flex h-10 shrink-0 items-center gap-2 border-b border-warm/15 px-2.5 ${
-          mode === "split" && windowMode === "normal"
+          mode === "split" && windowState === "normal"
             ? "cursor-grab touch-none active:cursor-grabbing"
             : ""
         }`}
@@ -432,7 +426,7 @@ export default function SessionWindow({
           />
         )}
         <span className="min-w-0 flex-1 truncate font-mono text-[10px] tracking-[0.18em] text-white/60">
-          {isMinimized ? (activeTrack?.title ?? session.label) : session.label}
+          {isMaximized ? `${session.label} · ${activeTrack?.title ?? ""}` : session.label}
         </span>
         {isVideo && (
           <span className="rounded-full border border-warm/20 px-1.5 py-0.5 text-[8px] text-white/35">
@@ -442,17 +436,6 @@ export default function SessionWindow({
         <span className="hidden text-[8px] text-white/25 sm:inline">
           {isVideo ? "ArtPlayer" : "Hi-Fi"}
         </span>
-        {isMinimized && (
-          <button
-            type="button"
-            onClick={() => toggleSessionPlaying(session.id)}
-            className="rounded-md p-1 text-warm-primary transition-colors hover:text-white"
-            aria-label={session.isPlaying ? "暂停" : "播放"}
-            title={session.isPlaying ? "暂停" : "播放"}
-          >
-            {session.isPlaying ? <Pause size={13} /> : <Play size={13} />}
-          </button>
-        )}
         <button
           type="button"
           onClick={cycleSkin}
@@ -464,19 +447,17 @@ export default function SessionWindow({
         </button>
         <button
           type="button"
-          onClick={() =>
-            setWindowMode(isMinimized ? "normal" : "minimized")
-          }
+          onClick={() => setSessionWindow(session.id, "minimized")}
           className="rounded-md p-1 text-white/40 transition-colors hover:text-warm-primary"
-          title={isMinimized ? "还原窗口" : "最小化"}
-          aria-label={isMinimized ? "还原窗口" : "最小化"}
+          title="最小化"
+          aria-label="最小化"
         >
           <Minus size={13} />
         </button>
         <button
           type="button"
           onClick={() =>
-            setWindowMode(isMaximized ? "normal" : "maximized")
+            setSessionWindow(session.id, isMaximized ? "normal" : "maximized")
           }
           className="rounded-md p-1 text-white/40 transition-colors hover:text-warm-primary"
           title={isMaximized ? "还原窗口" : "最大化"}
@@ -497,13 +478,12 @@ export default function SessionWindow({
         )}
       </header>
 
-      {!isMinimized && (
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-2 p-2 sm:p-3">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-2 p-2 sm:p-3">
           {isVideo ? (
           <div
             {...gesture.handlers}
             className={`media-gesture-surface relative min-h-[80px] flex-1 touch-none overflow-hidden rounded-xl border border-warm/10 bg-black/60 ${
-              session.orientation === "portrait"
+              session.orientation === "portrait" && !isMaximized
                 ? "mx-auto w-full max-w-[min(100%,48vh)]"
                 : "w-full"
             } ${session.skin === "minimal" ? "shadow-none" : "shadow-[0_12px_40px_rgba(0,0,0,.35)]"}`}
@@ -790,10 +770,9 @@ export default function SessionWindow({
             ))}
           </div>
         )}
-        </div>
-      )}
+      </div>
 
-      {mode === "split" && !isMinimized && !isMaximized && (
+      {mode === "split" && !isMaximized && (
         <div
           onPointerDown={onResizePointerDown}
           onPointerMove={onResizePointerMove}
@@ -815,11 +794,13 @@ export default function SessionWindow({
         className="hidden"
         onChange={handleUpload}
       />
-      {!isMinimized && (
-        <span className="pointer-events-none absolute bottom-3 right-10 z-10 hidden items-center gap-1 text-[8px] font-mono text-white/20 sm:flex">
-          <ListMusic size={9} /> {session.queue.length}
-        </span>
-      )}
+      <span className="pointer-events-none absolute bottom-3 right-10 z-10 hidden items-center gap-1 text-[8px] font-mono text-white/20 sm:flex">
+        <ListMusic size={9} /> {session.queue.length}
+      </span>
     </section>
   );
+
+  // 最大化浮层经 portal 渲染到 body：逃逸 unified 容器的 overflow 裁剪与层叠上下文
+  if (isMaximized) return createPortal(section, document.body);
+  return section;
 }

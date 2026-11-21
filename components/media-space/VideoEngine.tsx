@@ -133,7 +133,16 @@ const VideoEngine = forwardRef<VideoEngineHandle, VideoEngineProps>(
           setSessionTime(sessionId, video.currentTime, video.duration);
         const onEnded = () => handleSessionEnded(sessionId);
         const onError = () => {
-          setError("视频加载或解码失败");
+          const code = video.error?.code;
+          if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+            setError("浏览器不支持该视频编码（源文件可能为 HEVC/H.265 或损坏）");
+          } else if (code === MediaError.MEDIA_ERR_DECODE) {
+            setError("视频解码失败，文件数据可能已损坏");
+          } else if (code === MediaError.MEDIA_ERR_NETWORK) {
+            setError("视频加载失败，请检查网络后重试");
+          } else {
+            setError("视频加载或解码失败");
+          }
           setSessionPlaying(sessionId, false);
         };
 
@@ -260,11 +269,27 @@ const VideoEngine = forwardRef<VideoEngineHandle, VideoEngineProps>(
         />
         {error && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 px-4 text-center">
-            <div className="space-y-1">
+            <div className="space-y-2">
               <p className="text-xs text-red-200">{error}</p>
               <p className="text-[10px] text-white/40">
                 可尝试切换其他视频或播放器形态
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  const video = videoRef.current;
+                  if (!video) return;
+                  setError("");
+                  restoredRef.current = false;
+                  video.load();
+                  if (playingRef.current) {
+                    void video.play().catch(() => setSessionPlaying(sessionId, false));
+                  }
+                }}
+                className="rounded-full border border-warm/30 bg-black/40 px-3 py-1 text-[10px] text-warm-primary transition-colors hover:bg-warm-primary/15"
+              >
+                重试加载
+              </button>
             </div>
           </div>
         )}

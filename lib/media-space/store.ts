@@ -15,6 +15,8 @@ import { hostStorageSet } from "@/lib/host-bridge";
 export type MediaSpaceMode = "unified" | "split";
 export type PlayerSkin = "cinema" | "standard" | "minimal";
 export type AudioSkin = "vinyl" | "minimal";
+/** 窗口状态：所有容器（音频与视频实例）统一支持最小化与最大化 */
+export type WindowState = "normal" | "minimized" | "maximized";
 
 export interface WindowFrame {
   x: number;
@@ -39,6 +41,8 @@ export interface MediaSessionState {
   shuffle: boolean;
   skin: PlayerSkin | AudioSkin;
   orientation: "portrait" | "landscape";
+  /** 窗口状态：normal / minimized / maximized，统一由 store 持久化 */
+  windowState: WindowState;
   frame: WindowFrame;
 }
 
@@ -83,6 +87,7 @@ function makeSession(
     shuffle: false,
     skin,
     orientation: "landscape",
+    windowState: "normal",
     frame,
   };
 }
@@ -216,6 +221,10 @@ function restoreFromStorage(): MediaSpaceState {
               : "cinema",
         orientation:
           saved.orientation === "portrait" ? "portrait" : "landscape",
+        windowState:
+          saved.windowState === "minimized" || saved.windowState === "maximized"
+            ? saved.windowState
+            : "normal",
         frame: {
           x: Number.isFinite(saved.frame?.x)
             ? saved.frame.x
@@ -499,6 +508,27 @@ export function setSessionMuted(id: string, muted: boolean) {
 
 export function setSessionSkin(id: string, skin: MediaSessionState["skin"]) {
   patchSession(id, { skin });
+}
+
+/** 统一窗口状态切换：最小化 / 最大化 / 还原，全部容器共用同一份持久化状态 */
+export function setSessionWindow(id: string, windowState: WindowState) {
+  patchSession(id, { windowState });
+}
+
+/** 还原所有处于最小化或最大化状态的容器 */
+export function restoreAllWindows() {
+  const next: Record<string, MediaSessionState> = {};
+  let changed = false;
+  for (const [id, session] of Object.entries(state.sessions)) {
+    if (session.windowState === "normal") {
+      next[id] = session;
+      continue;
+    }
+    changed = true;
+    next[id] = { ...session, windowState: "normal" };
+  }
+  if (!changed) return;
+  emit({ ...state, sessions: next });
 }
 
 export function setSessionVideoMetrics(

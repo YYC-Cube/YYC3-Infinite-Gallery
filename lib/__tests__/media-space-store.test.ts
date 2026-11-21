@@ -165,6 +165,63 @@ describe("会话控制", () => {
       store.getMediaSpaceSnapshot().sessions[VIDEO_ID]?.orientation,
     ).toBe("landscape");
   });
+
+  test("setSessionWindow 应统一切换窗口状态且跨容器独立", () => {
+    expect(store.getMediaSpaceSnapshot().sessions[AUDIO_ID]?.windowState).toBe(
+      "normal",
+    );
+
+    store.setSessionWindow(AUDIO_ID, "minimized");
+    store.setSessionWindow(VIDEO_ID, "maximized");
+    expect(store.getMediaSpaceSnapshot().sessions[AUDIO_ID]?.windowState).toBe(
+      "minimized",
+    );
+    expect(store.getMediaSpaceSnapshot().sessions[VIDEO_ID]?.windowState).toBe(
+      "maximized",
+    );
+
+    store.setSessionWindow(VIDEO_ID, "normal");
+    expect(store.getMediaSpaceSnapshot().sessions[VIDEO_ID]?.windowState).toBe(
+      "normal",
+    );
+    expect(store.getMediaSpaceSnapshot().sessions[AUDIO_ID]?.windowState).toBe(
+      "minimized",
+    );
+  });
+
+  test("restoreAllWindows 应一次性还原所有最小化与最大化容器", () => {
+    store.setSessionWindow(AUDIO_ID, "minimized");
+    store.setSessionWindow(VIDEO_ID, "maximized");
+
+    store.restoreAllWindows();
+
+    const state = store.getMediaSpaceSnapshot();
+    expect(state.sessions[AUDIO_ID]?.windowState).toBe("normal");
+    expect(state.sessions[VIDEO_ID]?.windowState).toBe("normal");
+  });
+
+  test("窗口状态应随持久化恢复且非法值回落为 normal", async () => {
+    store.setSessionWindow(AUDIO_ID, "minimized");
+    await jest.advanceTimersByTimeAsync(1000);
+
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    expect(raw).toBeTruthy();
+    expect(JSON.parse(raw as string).sessions[AUDIO_ID].windowState).toBe(
+      "minimized",
+    );
+
+    const persisted = JSON.parse(raw as string);
+    persisted.sessions[VIDEO_ID].windowState = "bogus";
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+
+    const reloaded = await loadStore();
+    expect(reloaded.getMediaSpaceSnapshot().sessions[AUDIO_ID]?.windowState).toBe(
+      "minimized",
+    );
+    expect(reloaded.getMediaSpaceSnapshot().sessions[VIDEO_ID]?.windowState).toBe(
+      "normal",
+    );
+  });
 });
 
 describe("队列与播放模式", () => {

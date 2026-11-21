@@ -13,10 +13,14 @@ import {
   Columns3,
   Disc3,
   LayoutPanelTop,
-  Music2,
-  Plus,
+  Maximize2,
   Minus,
+  Music2,
+  Pause,
+  Play,
+  Plus,
   Sparkles,
+  Undo2,
   Video,
 } from "lucide-react";
 import type { GalleryConfig } from "@/lib/config-store";
@@ -32,8 +36,11 @@ import {
   getSessionTrack,
   MEDIA_SPACE_LIMITS,
   PRIMARY_SESSION_IDS,
+  restoreAllWindows,
+  setSessionWindow,
   setSpaceMode,
   setSpaceOpen,
+  toggleSessionPlaying,
   useMediaSpace,
 } from "@/lib/media-space/store";
 import SessionWindow from "./SessionWindow";
@@ -104,6 +111,11 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
   const videoCount = videoSessions.length;
   const currentAudio = audioSession ? getSessionTrack(audioSession) : undefined;
   const playingCount = sessions.filter((session) => session.isPlaying).length;
+  /** 处于最小化状态的容器：统一收纳到底部任务坞 */
+  const minimizedSessions = useMemo(
+    () => sessions.filter((session) => session.windowState === "minimized"),
+    [sessions],
+  );
 
   useEffect(() => {
     if (hydratedRef.current) return;
@@ -377,8 +389,75 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
         )}
       </div>
 
+      {/* 统一最小化任务坞：所有容器（音频/视频实例）共用同一收纳区 */}
+      {minimizedSessions.length > 0 && (
+        <div
+          className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-1/2 z-[9650] flex max-w-[calc(100vw-24px)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-warm/25 bg-[#0b0907]/92 p-1.5 shadow-2xl backdrop-blur-xl"
+          role="toolbar"
+          aria-label="最小化容器任务坞"
+        >
+          {minimizedSessions.map((mini) => {
+            const miniTrack = getSessionTrack(mini);
+            const miniIcon =
+              mini.kind === "audio" ? (
+                <Disc3
+                  size={13}
+                  className={`shrink-0 text-warm-primary ${mini.isPlaying ? "animate-spin" : ""}`}
+                  style={{ animationDuration: "6s" }}
+                />
+              ) : (
+                <Video size={13} className="shrink-0 text-warm-primary" />
+              );
+            return (
+              <div
+                key={mini.id}
+                data-session-kind={mini.kind}
+                data-window-mode="minimized"
+                aria-label={`${mini.label}，${miniTrack?.title ?? "暂无媒体"}（已最小化）`}
+                className="flex items-center gap-1 rounded-xl border border-warm/15 bg-black/35 py-0.5 pl-2 pr-0.5"
+              >
+                {miniIcon}
+                <span className="max-w-28 truncate text-[10px] text-white/60">
+                  {mini.label}
+                  {miniTrack?.title ? ` · ${miniTrack.title}` : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleSessionPlaying(mini.id)}
+                  className="rounded-md p-1 text-warm-primary transition-colors hover:text-white"
+                  aria-label={`${mini.label}${mini.isPlaying ? " 暂停" : " 播放"}`}
+                  title={mini.isPlaying ? "暂停" : "播放"}
+                >
+                  {mini.isPlaying ? <Pause size={12} /> : <Play size={12} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSessionWindow(mini.id, "normal")}
+                  className="rounded-md p-1 text-white/45 transition-colors hover:text-warm-primary"
+                  aria-label={`还原窗口 ${mini.label}`}
+                  title="还原窗口"
+                >
+                  <Maximize2 size={12} />
+                </button>
+              </div>
+            );
+          })}
+          {minimizedSessions.length > 1 && (
+            <button
+              type="button"
+              onClick={restoreAllWindows}
+              className="flex items-center gap-1 rounded-xl border border-warm/20 bg-black/25 px-2 py-1 text-[9px] text-white/50 transition-colors hover:border-warm/40 hover:text-warm-primary"
+              title="还原全部最小化容器"
+            >
+              <Undo2 size={11} />
+              全部还原
+            </button>
+          )}
+        </div>
+      )}
+
       {effectiveMode === "split" && (
-        <div className="pointer-events-none fixed bottom-20 left-1/2 z-[9001] -translate-x-1/2">
+        <div className="pointer-events-none fixed bottom-[calc(132px+env(safe-area-inset-bottom))] left-1/2 z-[9001] -translate-x-1/2">
           <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-warm/20 bg-[#0a0908]/80 px-3 py-1.5 text-[9px] text-white/35 shadow-xl backdrop-blur-xl">
             <Music2 size={10} />
             <span>拖动标题栏移动</span>
