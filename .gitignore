@@ -41,3 +41,5 @@ next-env.d.ts
 
 # 文档不提交远程，仅本地保留
 /docs/
+# Trae 本地分享包缓存
+.trae-html-share-packages/
