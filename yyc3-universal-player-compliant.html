@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="yyc3-dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>YYC³ 合规通用播放器 · 文件内容识别版</title>
+<meta name="description" content="纯本地运行的通用媒体播放器：通过文件头魔数识别真实格式，不上传任何数据。" />
+<style>
+  :root {
+    --bg: #090807;
+    --panel: rgba(212, 165, 116, 0.06);
+    --line: rgba(212, 165, 116, 0.22);
+    --gold: #d4a574;
+    --gold-strong: #e8c99e;
+    --text: rgba(255, 255, 255, 0.86);
+    --text-dim: rgba(255, 255, 255, 0.45);
+    --text-faint: rgba(255, 255, 255, 0.28);
+    --danger: #e8a0a0;
+    --ok: #a8d8b0;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(212,165,116,0.10), transparent 60%),
+      radial-gradient(900px 500px at 0% 110%, rgba(212,165,116,0.07), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 48px;
+    min-height: 100vh;
+  }
+  header { text-align: center; margin-bottom: 22px; }
+  header .brand {
+    font-size: 11px; letter-spacing: 0.42em; color: var(--text-faint);
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  header h1 {
+    font-size: 26px; font-weight: 600; letter-spacing: 0.06em; color: var(--gold-strong);
+  }
+  header p.sub { margin-top: 8px; font-size: 12px; color: var(--text-dim); letter-spacing: 0.12em; }
+  .badge-row { margin-top: 12px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    font-size: 10px; letter-spacing: 0.18em; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--gold); background: var(--panel);
+  }
+  main { width: min(920px, 100%); display: flex; flex-direction: column; gap: 18px; }
+  section.card {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: rgba(12, 10, 9, 0.72); backdrop-filter: blur(14px);
+    padding: 18px;
+  }
+  section.card h2 {
+    font-size: 12px; letter-spacing: 0.3em; color: var(--gold);
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  section.card h2::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); opacity: 0.7; }
+
+  /* 拖放区 */
+  #dropzone {
+    border: 1.5px dashed rgba(212, 165, 116, 0.35); border-radius: var(--radius);
+    padding: 34px 18px; text-align: center; cursor: pointer;
+    transition: border-color 200ms ease, background 200ms ease; outline: none;
+  }
+  #dropzone:hover, #dropzone:focus-visible, #dropzone.drag {
+    border-color: var(--gold); background: rgba(212, 165, 116, 0.07);
+  }
+  #dropzone .icon { font-size: 30px; color: var(--gold); opacity: 0.8; }
+  #dropzone .main-line { margin-top: 10px; font-size: 14px; color: var(--text); }
+  #dropzone .hint { margin-top: 6px; font-size: 11px; color: var(--text-faint); letter-spacing: 0.08em; }
+  #file-input { display: none; }
+
+  /* 播放器 */
+  .stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid rgba(212,165,116,0.14); }
+  .stage video, .stage audio { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  .stage audio { height: 48px; margin-top: calc(50% - 24px); }
+  .stage .idle {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; color: var(--text-faint); font-size: 12px;
+    letter-spacing: 0.2em;
+  }
+  .now-meta { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .now-meta .title { font-size: 14px; color: var(--gold-strong); margin-right: auto; }
+  .chip {
+    font-size: 10px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--text-dim); font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .chip.ok { color: var(--ok); border-color: rgba(168, 216, 176, 0.35); }
+  .chip.warn { color: var(--danger); border-color: rgba(232, 160, 160, 0.35); }
+
+  /* 识别清单 */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(212,165,116,0.10); }
+  th { color: var(--text-faint); font-weight: 500; letter-spacing: 0.14em; font-size: 10px; }
+  td .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; }
+  tr.item:hover { background: rgba(212, 165, 116, 0.05); }
+  tr.item.current { background: rgba(212, 165, 116, 0.10); }
+  td.actions { text-align: right; white-space: nowrap; }
+  button.play-btn {
+    border: 1px solid var(--line); background: var(--panel); color: var(--gold);
+    font-size: 11px; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+    transition: background 160ms ease, color 160ms ease;
+  }
+  button.play-btn:hover { background: rgba(212,165,116,0.18); color: var(--gold-strong); }
+  button.ghost-btn {
+    border: none; background: none; color: var(--text-faint); cursor: pointer; font-size: 11px;
+    padding: 4px 6px;
+  }
+  button.ghost-btn:hover { color: var(--danger); }
+  .empty { padding: 22px 8px; text-align: center; color: var(--text-faint); font-size: 12px; letter-spacing: 0.12em; }
+
+  /* 合规声明 */
+  .compliance ol { margin-left: 18px; display: grid; gap: 8px; }
+  .compliance li { font-size: 12px; line-height: 1.8; color: var(--text-dim); }
+  .compliance li strong { color: var(--gold); font-weight: 600; }
+  .footer-note { margin-top: 20px; font-size: 10px; color: var(--text-faint); letter-spacing: 0.24em; text-align: center; }
+  @media (max-width: 640px) {
+    header h1 { font-size: 20px; }
+    .stage audio { height: 44px; margin-top: 0; position: absolute; bottom: 0; }
+    th:nth-child(2), td:nth-child(2) { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <p class="brand">YYC³ · Autonomous Media</p>
+  <h1>合规通用播放器 · 文件内容识别版</h1>
+  <p class="sub">读取文件头魔数识别真实格式 · 不依赖扩展名 · 全程本地处理</p>
+  <div class="badge-row">
+    <span class="badge">100% 本地运行</span>
+    <span class="badge">零上传 · 零采集</span>
+    <span class="badge">MP4 / MOV / WebM / MKV</span>
+    <span class="badge">MP3 / FLAC / WAV / OGG / AAC / M4A</span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>添加文件</h2>
+    <div id="dropzone" role="button" tabindex="0" aria-label="拖入或点击选择本地媒体文件">
+      <div class="icon">⬇</div>
+      <p class="main-line">拖入文件，或点击选择（支持多选）</p>
+      <p class="hint">仅读取文件头部 64 字节识别容器格式，文件不会离开你的设备</p>
+    </div>
+    <input id="file-input" type="file" multiple accept="audio/*,video/*,.mkv,.flac,.ogg,.aac,.m4a,.mov,.avi" />
+  </section>
+
+  <section class="card">
+    <h2>播放</h2>
+    <div class="stage" id="stage">
+      <video id="player" playsinline controls style="display:none"></video>
+      <div class="idle" id="idle">等待添加媒体文件</div>
+    </div>
+    <div class="now-meta" id="now-meta" hidden>
+      <span class="title" id="now-title">—</span>
+      <span class="chip" id="chip-container">容器 —</span>
+      <span class="chip" id="chip-duration">时长 —</span>
+      <span class="chip" id="chip-decode">解码 —</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>识别清单 <span id="count" style="color:var(--text-faint);letter-spacing:0;"></span></h2>
+    <div id="list-wrap">
+      <p class="empty" id="empty">尚未添加文件</p>
+      <table id="table" hidden>
+        <thead>
+          <tr><th>文件名</th><th>嗅探结果（魔数）</th><th>大小</th><th>时长</th><th>解码</th><th></th></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card compliance">
+    <h2>合规声明</h2>
+    <ol>
+      <li><strong>仅本地处理：</strong>全部解析与播放均在浏览器内完成，<strong>任何文件与数据都不会上传至服务器</strong>；断网状态下本页面依然完整可用。</li>
+      <li><strong>最小化读取：</strong>识别仅读取文件头部至多 64 字节（魔数签名）用于判断容器格式，不解析、不修改文件内容语义。</li>
+      <li><strong>版权与授权：</strong>请确保你对自己播放的文件拥有合法权利或有效授权；本工具不提供、不检索、不分发任何受版权保护的内容。</li>
+      <li><strong>隐私与留存：</strong>不写入 Cookie / localStorage / IndexedDB，不采集播放行为；关闭或刷新页面后所有临时数据立即释放。</li>
+      <li><strong>编码提示：</strong>若嗅探成功但浏览器缺少对应解码器（如 HEVC/H.265、部分 MKV 编码组合），将明确标记"可能无法解码"，可换用支持该编码的浏览器或转码为 H.264 / AAC。</li>
+    </ol>
+  </section>
+</main>
+
+<p class="footer-note">YYC³ YANYUCLOUDCUBE · 五高架构 · 本地优先 · 合规通用</p>
+
+<script>
+"use strict";
+
+/* ============================
+   魔数嗅探：识别文件真实容器
+   ============================ */
+const CONTAINERS = {
+  mp4:   { label: "MP4 / M4V（ISO-BMFF）", kind: "video", mime: "video/mp4" },
+  m4a:   { label: "M4A（MP4 音频轨）",      kind: "audio", mime: "audio/mp4" },
+  mov:   { label: "QuickTime MOV",          kind: "video", mime: "video/quicktime" },
+  webm:  { label: "WebM",                   kind: "video", mime: "video/webm" },
+  mkv:   { label: "Matroska MKV",           kind: "video", mime: "video/x-matroska" },
+  mp3:   { label: "MP3（MPEG Audio）",      kind: "audio", mime: "audio/mpeg" },
+  aac:   { label: "AAC（ADTS 裸流）",       kind: "audio", mime: "audio/aac" },
+  flac:  { label: "FLAC（无损）",           kind: "audio", mime: "audio/flac" },
+  wav:   { label: "WAV（PCM 波形）",        kind: "audio", mime: "audio/wav" },
+  ogg:   { label: "OGG（Vorbis/Opus）",     kind: "audio", mime: "audio/ogg" },
+  avi:   { label: "AVI（旧式容器）",        kind: "video", mime: "video/x-msvideo" },
+};
+
+function ascii(bytes, start, length) {
+  let out = "";
+  for (let i = start; i < start + length && i < bytes.length; i += 1) {
+    out += String.fromCharCode(bytes[i]);
+  }
+  return out;
+}
+
+/** @returns {{ id: string, label: string, kind: "video"|"audio", mime: string, confident: boolean } | null} */
+function sniffFormat(bytes, name) {
+  const b = bytes;
+  // ISO-BMFF：第 4-7 字节为 "ftyp"，第 8-11 字节为 brand
+  if (ascii(b, 4, 4) === "ftyp") {
+    const brand = ascii(b, 8, 4);
+    if (brand.startsWith("M4A")) return wrap("m4a", true);
+    if (brand.startsWith("qt")) return wrap("mov", true);
+    return wrap("mp4", true);
+  }
+  // EBML：Matroska / WebM
+  if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) {
+    const head = ascii(b, 0, Math.min(64, b.length));
+    return wrap(head.includes("webm") ? "webm" : "mkv", true);
+  }
+  // ID3v2 标签 → MP3
+  if (ascii(b, 0, 3) === "ID3") return wrap("mp3", true);
+  // MPEG 帧同步（0xFF 0xEx）：layer 位区分 MP3 / ADTS AAC
+  if (b[0] === 0xff && (b[1] & 0xe0) === 0xe0) {
+    const layer = (b[1] & 0x06) >> 1;
+    return wrap(layer === 0 ? "aac" : "mp3", true);
+  }
+  if (ascii(b, 0, 4) === "fLaC") return wrap("flac", true);
+  if (ascii(b, 0, 4) === "RIFF") {
+    const sub = ascii(b, 8, 4);
+    if (sub === "WAVE") return wrap("wav", true);
+    if (sub === "AVI ") return wrap("avi", true);
+  }
+  if (ascii(b, 0, 4) === "OggS") return wrap("ogg", true);
+
+  // 魔数未命中：按扩展名低置信度推断
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  const extMap = {
+    mp4: "mp4", m4v: "mp4", mov: "mov", webm: "webm", mkv: "mkv",
+    mp3: "mp3", aac: "aac", flac: "flac", wav: "wav", ogg: "ogg",
+    oga: "ogg", opus: "ogg", m4a: "m4a", avi: "avi",
+  };
+  return extMap[ext] ? wrap(extMap[ext], false) : null;
+
+  function wrap(id, confident) {
+    const meta = CONTAINERS[id];
+    return { id, label: meta.label, kind: meta.kind, mime: meta.mime, confident };
+  }
+}
+
+/* ============================
+   工具函数
+   ============================ */
+const player = document.getElementById("player");
+const idle = document.getElementById("idle");
+const nowMeta = document.getElementById("now-meta");
+const nowTitle = document.getElementById("now-title");
+const chipContainer = document.getElementById("chip-container");
+const chipDuration = document.getElementById("chip-duration");
+const chipDecode = document.getElementById("chip-decode");
+const tbody = document.getElementById("tbody");
+const table = document.getElementById("table");
+const empty = document.getElementById("empty");
+const count = document.getElementById("count");
+
+/** @type {{ file: File, sniffed: ReturnType<typeof sniffFormat>, url: string, duration: number, current: boolean }[]} */
+const items = [];
+const objectUrls = new Set();
+
+function formatBytes(size) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds)) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** 探测浏览器对容器 + 常见编码组合的解码能力 */
+function decodeVerdict(sniffed) {
+  const probes = {
+    mp4:  ['video/mp4; codecs="avc1.640028, mp4a.40.2"', 'video/mp4; codecs="hvc1.1.6.L93.B0"'],
+    m4a:  ['audio/mp4; codecs="mp4a.40.2"'],
+    mov:  ['video/quicktime; codecs="avc1.640028, mp4a.40.2"'],
+    webm: ['video/webm; codecs="vp9, opus"', 'video/webm; codecs="vp8, vorbis"'],
+    mkv:  ['video/x-matroska; codecs="avc1.640028, mp4a.40.2"'],
+    mp3:  ['audio/mpeg'],
+    aac:  ['audio/aac'],
+    flac: ['audio/flac'],
+    wav:  ['audio/wav; codecs="1"'],
+    ogg:  ['audio/ogg; codecs="opus"', 'audio/ogg; codecs="vorbis"'],
+    avi:  ['video/x-msvideo'],
+  }[sniffed.id] || [sniffed.mime];
+  const best = probes.reduce((acc, p) => {
+    const verdict = player.canPlayType(p);
+    if (verdict === "probably") return "probably";
+    if (verdict === "maybe" && acc === "") return "maybe";
+    return acc;
+  }, "");
+  if (best === "probably") return { level: "ok", text: "支持" };
+  if (best === "maybe") return { level: "ok", text: "可能支持" };
+  return { level: "warn", text: "可能无法解码" };
+}
+
+/* ============================
+   清单渲染与播放
+   ============================ */
+function refreshList() {
+  count.textContent = items.length ? `（${items.length}）` : "";
+  table.hidden = items.length === 0;
+  empty.hidden = items.length !== 0;
+  tbody.textContent = "";
+  items.forEach((item, index) => {
+    const tr = document.createElement("tr");
+    tr.className = `item${item.current ? " current" : ""}`;
+
+    const tdName = document.createElement("td");
+    tdName.textContent = item.file.name;
+    tdName.title = item.file.name;
+    const tdSniff = document.createElement("td");
+    tdSniff.className = "mono";
+    tdSniff.textContent = item.sniffed
+      ? `${item.sniffed.label}${item.sniffed.confident ? "" : "（按扩展名推断）"}`
+      : "未识别的格式";
+    tdSniff.style.color = item.sniffed ? "" : "var(--danger)";
+    const tdSize = document.createElement("td");
+    tdSize.className = "mono";
+    tdSize.textContent = formatBytes(item.file.size);
+    const tdDuration = document.createElement("td");
+    tdDuration.className = "mono";
+    tdDuration.textContent = item.duration ? formatDuration(item.duration) : "—";
+    const tdDecode = document.createElement("td");
+    if (item.sniffed) {
+      const verdict = decodeVerdict(item.sniffed);
+      const span = document.createElement("span");
+      span.className = `chip ${verdict.level}`;
+      span.textContent = verdict.text;
+      tdDecode.appendChild(span);
+    } else {
+      tdDecode.textContent = "—";
+    }
+    const tdActions = document.createElement("td");
+    tdActions.className = "actions";
+    if (item.sniffed) {
+      const play = document.createElement("button");
+      play.type = "button";
+      play.className = "play-btn";
+      play.textContent = item.current ? "播放中" : "播放";
+      play.addEventListener("click", () => playItem(index));
+      tdActions.appendChild(play);
+    }
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "ghost-btn";
+    remove.textContent = "移除";
+    remove.setAttribute("aria-label", `移除 ${item.file.name}`);
+    remove.addEventListener("click", () => removeItem(index));
+    tdActions.appendChild(remove);
+
+    tr.append(tdName, tdSniff, tdSize, tdDuration, tdDecode, tdActions);
+    tbody.appendChild(tr);
+  });
+}
+
+function playItem(index) {
+  const item = items[index];
+  if (!item || !item.sniffed) return;
+  items.forEach((entry, i) => { entry.current = i === index; });
+  player.style.display = "";
+  idle.style.display = "none";
+  nowMeta.hidden = false;
+  nowTitle.textContent = item.file.name;
+  chipContainer.textContent = item.sniffed.label;
+  player.src = item.url;
+  player.play().catch(() => { /* 自动播放被拦截时等待用户手动操作 */ });
+  refreshList();
+}
+
+function removeItem(index) {
+  const item = items[index];
+  if (!item) return;
+  if (item.current) {
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    player.style.display = "none";
+    idle.style.display = "";
+    nowMeta.hidden = true;
+  }
+  objectUrls.delete(item.url);
+  URL.revokeObjectURL(item.url);
+  items.splice(index, 1);
+  refreshList();
+}
+
+/** 读取文件头 64 字节做魔数嗅探，并探测时长 */
+async function ingest(file) {
+  const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+  const sniffed = sniffFormat(head, file.name);
+  const item = {
+    file,
+    sniffed,
+    url: sniffed ? URL.createObjectURL(new Blob([file], { type: sniffed.mime })) : "",
+    duration: 0,
+    current: false,
+  };
+  if (item.url) objectUrls.add(item.url);
+
+  if (sniffed) {
+    // 探测时长：解码元数据后立即释放临时元素
+    const probe = document.createElement(sniffed.kind === "audio" ? "audio" : "video");
+    probe.preload = "metadata";
+    probe.src = item.url;
+    await new Promise((resolve) => {
+      const done = () => { probe.removeAttribute("src"); probe.load(); resolve(); };
+      probe.addEventListener("loadedmetadata", () => {
+        item.duration = Number.isFinite(probe.duration) ? probe.duration : 0;
+        done();
+      }, { once: true });
+      probe.addEventListener("error", done, { once: true });
+      setTimeout(done, 4000);
+    });
+  }
+  items.push(item);
+}
+
+async function addFiles(fileList) {
+  const files = Array.from(fileList);
+  if (files.length === 0) return;
+  idle.textContent = "识别中…";
+  for (const file of files) {
+    // eslint-disable-next-line no-await-in-loop
+    await ingest(file);
+  }
+  idle.textContent = items.length ? "从下方清单选择播放" : "未识别到可播放的媒体文件";
+  refreshList();
+}
+
+/* ============================
+   交互绑定
+   ============================ */
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("file-input");
+
+dropzone.addEventListener("click", () => fileInput.click());
+dropzone.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    fileInput.click();
+  }
+});
+fileInput.addEventListener("change", () => {
+  void addFiles(fileInput.files);
+  fileInput.value = "";
+});
+["dragenter", "dragover"].forEach((type) =>
+  dropzone.addEventListener(type, (event) => {
+    event.preventDefault();
+    dropzone.classList.add("drag");
+  }),
+);
+["dragleave", "drop"].forEach((type) =>
+  dropzone.addEventListener(type, (event) => {
+    event.preventDefault();
+    dropzone.classList.remove("drag");
+  }),
+);
+dropzone.addEventListener("drop", (event) => {
+  if (event.dataTransfer) void addFiles(event.dataTransfer.files);
+});
+window.addEventListener("beforeunload", () => {
+  objectUrls.forEach((url) => URL.revokeObjectURL(url));
+});
+</script>
+</body>
+</html>

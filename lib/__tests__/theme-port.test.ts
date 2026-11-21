@@ -1,0 +1,300 @@
+/**
+ * @file 主题方案导入导出与对比度评估单元测试
+ * @description 覆盖导出负载、导入校验（格式/字段/颜色/上限）与 WCAG 对比度纯函数
+ * @author YYC³
+ * @version 1.0.0
+ * @created 2026-11-22
+ */
+import { DEFAULT_CONFIG, type GalleryConfig } from "../config-store";
+import type { ThemePortPayload } from "../theme-port";
+import {
+  blendOver,
+  buildThemePayload,
+  contrastRatio,
+  downloadThemePayload,
+  evaluateContrast,
+  parseColorToRgb,
+  parseThemeImport,
+  relativeLuminance,
+  THEME_PORT_MAX_BYTES,
+} from "../theme-port";
+
+function makePayload(overrides: Partial<ThemePortPayload> = {}): string {
+  const base: ThemePortPayload = {
+    ...buildThemePayload(DEFAULT_CONFIG, "warm-art", "测试方案"),
+    ...overrides,
+  };
+  return JSON.stringify(base);
+}
+
+describe("buildThemePayload", () => {
+  test("应包含格式标识、主题 ID 与全部分组字段", () => {
+    const payload = buildThemePayload(DEFAULT_CONFIG, "warm-art");
+    expect(payload.format).toBe("yyc3-theme");
+    expect(payload.version).toBe(1);
+    expect(payload.theme).toBe("warm-art");
+    expect(payload.colors.warmPrimaryColor).toBe("#d4a574");
+    expect(payload.colors.borderChroma).toBe("212 165 116");
+    expect(payload.typography.fontSize).toBe("base");
+    expect(payload.animation.floatDistance).toBe(-10);
+    expect(payload.layout.enableGlowEffect).toBe(true);
+    expect(payload.exportedAt).toBeTruthy();
+  });
+
+  test("自定义名称应优先于默认命名", () => {
+    const payload = buildThemePayload(DEFAULT_CONFIG, "aurora", "我的极光");
+    expect(payload.name).toBe("我的极光");
+  });
+});
+
+describe("parseThemeImport", () => {
+  test("合法负载应通过并标记全部显式覆盖", () => {
+    const raw = makePayload({
+      colors: {
+        warmPrimaryColor: "#8b9dc3",
+        borderChroma: "139 157 195",
+        glowIntensity: 0.6,
+        glowRadius: 40,
+        glassBlur: 12,
+        ambientTopColor: "rgba(139, 157, 195, 0.06)",
+        ambientLeftColor: "rgba(120, 140, 180, 0.05)",
+        ambientRightColor: "rgba(100, 130, 170, 0.04)",
+        ambientCenterColor: "rgba(160, 170, 190, 0.03)",
+      },
+    });
+    const result = parseThemeImport(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.name).toBe("测试方案");
+    expect(result.themeId).toBe("warm-art");
+    expect(result.config.warmPrimaryColor).toBe("#8b9dc3");
+    expect(result.config.glowIntensity).toBe(0.6);
+    expect(result.config.visualOverrides).toEqual({
+      warmPrimary: true,
+      ambient: true,
+      glow: true,
+      border: true,
+    });
+    expect(result.skipped).toBe(0);
+  });
+
+  test("非 JSON / 错误格式 / 空内容应拒绝", () => {
+    expect(parseThemeImport("not json").ok).toBe(false);
+    expect(parseThemeImport('{"foo": 1}').ok).toBe(false);
+    expect(
+      parseThemeImport('{"format":"other-theme","version":1}').ok,
+    ).toBe(false);
+    expect(parseThemeImport("   ").ok).toBe(false);
+  });
+
+  test("超过 64KB 上限应拒绝", () => {
+    const huge = makePayload();
+    const inflated = JSON.stringify({
+      ...JSON.parse(huge),
+      name: "x".repeat(THEME_PORT_MAX_BYTES + 1),
+    });
+    const result = parseThemeImport(inflated);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("64KB");
+  });
+
+  test("非法颜色字段应跳过并计入 skipped，其余字段照常应用", () => {
+    const raw = JSON.stringify({
+      format: "yyc3-theme",
+      version: 1,
+      name: "混合方案",
+      theme: "unknown-theme",
+      colors: {
+        warmPrimaryColor: "<script>alert(1)</script>",
+        ambientTopColor: "rgba(1, 2, 3, 0.5)",
+        glowIntensity: 2,
+      },
+      typography: { fontSize: "lg" },
+    });
+    const result = parseThemeImport(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.warmPrimaryColor).toBeUndefined();
+    expect(result.config.ambientTopColor).toBe("rgba(1, 2, 3, 0.5)");
+    expect(result.config.glowIntensity).toBe(2);
+    expect(result.config.fontSize).toBe("lg");
+    expect(result.skipped).toBe(1);
+    expect(result.themeId).toBeNull();
+    expect(result.config.visualOverrides!.warmPrimary).toBe(false);
+    expect(result.config.visualOverrides!.glow).toBe(true);
+  });
+
+  test("非法 borderChroma 应被跳过；仅含非法字段时整体拒绝", () => {
+    // 仅非法字段：无可应用内容 → 整体拒绝
+    const onlyInvalid = JSON.stringify({
+      format: "yyc3-theme",
+      version: 1,
+      colors: { borderChroma: "999 999 999 999" },
+    });
+    expect(parseThemeImport(onlyInvalid).ok).toBe(false);
+
+    // 混合合法字段：非法项跳过并计数
+    const mixed = JSON.stringify({
+      format: "yyc3-theme",
+      version: 1,
+      colors: { borderChroma: "999 999 999 999", glowIntensity: 1 },
+    });
+    const result = parseThemeImport(mixed);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.config.borderChroma).toBeUndefined();
+      expect(result.config.glowIntensity).toBe(1);
+      expect(result.skipped).toBe(1);
+    }
+  });
+
+  test("超长字符串字段应被忽略", () => {
+    const raw = JSON.stringify({
+      format: "yyc3-theme",
+      version: 1,
+      colors: { warmPrimaryColor: "#d4a574" },
+      typography: { fontSize: "x".repeat(30) },
+      brand: { line1: "标".repeat(60) },
+    });
+    const result = parseThemeImport(raw);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.config.fontSize).toBeUndefined();
+      expect(result.config.brandLine1).toBeUndefined();
+    }
+  });
+
+  test("未含任何可应用字段应拒绝", () => {
+    const raw = JSON.stringify({ format: "yyc3-theme", version: 1 });
+    const result = parseThemeImport(raw);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("downloadThemePayload", () => {
+  test("jsdom 下应触发下载并清理节点", () => {
+    // jsdom 的 URL 未实现 blob 方法，先注入再断言
+    const urlMock = URL as unknown as {
+      createObjectURL?: jest.Mock;
+      revokeObjectURL?: jest.Mock;
+    };
+    if (typeof urlMock.createObjectURL !== "function") {
+      urlMock.createObjectURL = jest.fn(() => "blob:mock");
+    }
+    if (typeof urlMock.revokeObjectURL !== "function") {
+      urlMock.revokeObjectURL = jest.fn();
+    }
+    const createSpy = jest
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:mock");
+    const revokeSpy = jest.spyOn(URL, "revokeObjectURL");
+
+    const payload = buildThemePayload(DEFAULT_CONFIG, "warm-art");
+    const appended: Element[] = [];
+    const spy = jest
+      .spyOn(document.body, "appendChild")
+      .mockImplementation(((node: Element) => {
+        appended.push(node);
+        return node;
+      }) as typeof document.body.appendChild);
+    const removeSpy = jest
+      .spyOn(Element.prototype, "remove")
+      .mockImplementation(() => undefined);
+
+    expect(downloadThemePayload(payload)).toBe(true);
+    expect(appended).toHaveLength(1);
+    const anchor = appended[0] as HTMLAnchorElement;
+    expect(anchor.download).toMatch(/^yyc3-theme-warm-art-\d+\.json$/);
+    expect(removeSpy).toHaveBeenCalled();
+    expect(revokeSpy).toHaveBeenCalledWith("blob:mock");
+
+    spy.mockRestore();
+    removeSpy.mockRestore();
+    revokeSpy.mockRestore();
+    createSpy.mockRestore();
+  });
+});
+
+describe("颜色解析与对比度", () => {
+  test("parseColorToRgb 应支持 hex 三位/六位与 rgb()/rgba()", () => {
+    expect(parseColorToRgb("#d4a574")).toEqual({
+      rgb: [212, 165, 116],
+      alpha: 1,
+    });
+    expect(parseColorToRgb("#FSA")).toBeNull();
+    expect(parseColorToRgb("#fff")).toEqual({ rgb: [255, 255, 255], alpha: 1 });
+    expect(parseColorToRgb("rgb(52, 211, 153)")).toEqual({
+      rgb: [52, 211, 153],
+      alpha: 1,
+    });
+    expect(parseColorToRgb("rgba(212, 165, 116, 0.08)")).toEqual({
+      rgb: [212, 165, 116],
+      alpha: 0.08,
+    });
+    expect(parseColorToRgb("rgba(300, 0, 0, 1)")).toBeNull();
+    expect(parseColorToRgb("rgba(1, 2, 3, 2)")).toBeNull();
+    expect(parseColorToRgb("hsl(0, 0%, 0%)")).toBeNull();
+  });
+
+  test("blendOver 应按 alpha 混合，不透明时透传", () => {
+    const fg = { rgb: [255, 255, 255] as [number, number, number], alpha: 0 };
+    expect(blendOver(fg, [0, 0, 0])).toEqual([0, 0, 0]);
+    const half = { rgb: [200, 100, 50] as [number, number, number], alpha: 0.5 };
+    expect(blendOver(half, [100, 100, 100])).toEqual([150, 100, 75]);
+    const opaque = {
+      rgb: [10, 20, 30] as [number, number, number],
+      alpha: 1,
+    };
+    expect(blendOver(opaque, [255, 255, 255])).toEqual([10, 20, 30]);
+  });
+
+  test("relativeLuminance 黑为 0 白为 1", () => {
+    expect(relativeLuminance([0, 0, 0])).toBeCloseTo(0, 5);
+    expect(relativeLuminance([255, 255, 255])).toBeCloseTo(1, 5);
+  });
+
+  test("contrastRatio 黑白为 21，同色为 1", () => {
+    expect(contrastRatio([0, 0, 0], [255, 255, 255])).toBeCloseTo(21, 1);
+    expect(contrastRatio([120, 120, 120], [120, 120, 120])).toBeCloseTo(1, 5);
+  });
+
+  test("evaluateContrast 应输出正确 WCAG 等级", () => {
+    const blackOnWhite = evaluateContrast("#000000", "#ffffff");
+    expect(blackOnWhite!.level).toBe("AAA");
+    expect(blackOnWhite!.ratio).toBeGreaterThan(20);
+
+    // 温润主题：主色 #d4a574 对 #0a0908 背景
+    const warm = evaluateContrast("#d4a574", "#0a0908");
+    expect(warm).not.toBeNull();
+    expect(warm!.passesAA).toBe(true);
+    expect(["AA", "AAA"]).toContain(warm!.level);
+
+    // 半透明前景应先混合再计算
+    const ghost = evaluateContrast(
+      "rgba(255, 255, 255, 0.03)",
+      "#0a0908",
+    );
+    expect(ghost!.passesAA).toBe(false);
+    expect(ghost!.level).toBe("Fail");
+
+    // 3~4.5 区间为 AA-Large
+    const mid = evaluateContrast("#777777", "#ffffff");
+    expect(mid!.level).toBe("AA-Large");
+
+    expect(evaluateContrast("oops", "#ffffff")).toBeNull();
+    expect(evaluateContrast("#ffffff", "nope")).toBeNull();
+  });
+});
+
+describe("导入配置与 normalizeConfig 兼容", () => {
+  test("导入结果可直接交给 normalizeConfig 生成完整配置", () => {
+    const result = parseThemeImport(
+      makePayload({ theme: "deep-night" }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const merged = { ...DEFAULT_CONFIG, ...result.config } as GalleryConfig;
+    expect(merged.warmPrimaryColor).toBe(DEFAULT_CONFIG.warmPrimaryColor);
+    expect(merged.visualOverrides.warmPrimary).toBe(true);
+  });
+});

@@ -1,0 +1,32 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "dictionaries": ["project-words"],
+  "dictionaryDefinitions": [
+    {
+      "name": "project-words",
+      "path": "./cspell-words.txt",
+      "addWords": true
+    }
+  ],
+  "ignorePaths": [
+    "node_modules",
+    "out",
+    ".next",
+    "coverage",
+    "pnpm-lock.yaml",
+    "public/sw.js",
+    "public/mp3/**",
+    "public/mv-3x4/**",
+    "public/mv-4x3/**",
+    "public/artist-3x4/**",
+    "public/artist-4x3/**",
+    "playwright-report",
+    "test-results",
+    ".uploads"
+  ],
+  "ignoreRegExpList": [
+    "YYC³",
+    "/[\\u4e00-\\u9fff]+/gu"
+  ]
+}

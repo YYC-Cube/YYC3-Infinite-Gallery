@@ -1,0 +1,396 @@
+/**
+ * @file 主题方案导入导出与对比度评估
+ * @description Design Studio 主题 JSON 导出/导入校验 + WCAG 对比度纯函数计算
+ * @author YYC³
+ * @version 1.0.0
+ * @created 2026-11-22
+ */
+import { THEME_DEFINITIONS, type GalleryTheme } from "@/lib/version-store";
+import type { GalleryConfig } from "@/lib/config-store";
+
+/** 导出负载上限：主题 JSON 属轻量配置，64KB 远超实际需要，防御性截断 */
+export const THEME_PORT_MAX_BYTES = 64 * 1024;
+
+export interface ThemePortPayload {
+  format: "yyc3-theme";
+  version: 1;
+  name: string;
+  exportedAt: string;
+  /** 导出时基于的主题 ID；导入时若合法则同步切换 */
+  theme: string;
+  colors: {
+    warmPrimaryColor: string;
+    borderChroma: string;
+    glowIntensity: number;
+    glowRadius: number;
+    glassBlur: number;
+    ambientTopColor: string;
+    ambientLeftColor: string;
+    ambientRightColor: string;
+    ambientCenterColor: string;
+  };
+  brand: { line1: string; line2: string };
+  typography: {
+    fontSize: string;
+    fontWeight: string;
+    letterSpacing: number;
+    textOpacity: number;
+  };
+  animation: {
+    revealDuration: number;
+    revealDelay: number;
+    floatDuration: number;
+    floatDistance: number;
+    breatheDuration: number;
+  };
+  layout: {
+    footerPaddingY: number;
+    separatorWidth: number;
+    enableGlowEffect: boolean;
+  };
+}
+
+/** 从完整配置提炼可导出的主题方案（不含背景二进制与 assetId） */
+export function buildThemePayload(
+  config: GalleryConfig,
+  theme: GalleryTheme,
+  name?: string,
+): ThemePortPayload {
+  return {
+    format: "yyc3-theme",
+    version: 1,
+    name: name?.trim() || `YYC³ 主题方案 · ${theme}`,
+    exportedAt: new Date().toISOString(),
+    theme,
+    colors: {
+      warmPrimaryColor: config.warmPrimaryColor,
+      borderChroma: config.borderChroma,
+      glowIntensity: config.glowIntensity,
+      glowRadius: config.glowRadius,
+      glassBlur: config.glassBlur,
+      ambientTopColor: config.ambientTopColor,
+      ambientLeftColor: config.ambientLeftColor,
+      ambientRightColor: config.ambientRightColor,
+      ambientCenterColor: config.ambientCenterColor,
+    },
+    brand: { line1: config.brandLine1, line2: config.brandLine2 },
+    typography: {
+      fontSize: config.fontSize,
+      fontWeight: config.fontWeight,
+      letterSpacing: config.letterSpacing,
+      textOpacity: config.textOpacity,
+    },
+    animation: {
+      revealDuration: config.revealDuration,
+      revealDelay: config.revealDelay,
+      floatDuration: config.floatDuration,
+      floatDistance: config.floatDistance,
+      breatheDuration: config.breatheDuration,
+    },
+    layout: {
+      footerPaddingY: config.footerPaddingY,
+      separatorWidth: config.separatorWidth,
+      enableGlowEffect: config.enableGlowEffect,
+    },
+  };
+}
+
+export type ThemeImportResult =
+  | {
+      ok: true;
+      name: string;
+      themeId: GalleryTheme | null;
+      /** 导入值一律视为显式覆盖主题 */
+      config: Partial<GalleryConfig>;
+      /** 因格式非法被跳过的字段数（不影响其余字段应用） */
+      skipped: number;
+    }
+  | { ok: false; error: string };
+
+const NUMBER_FIELDS = {
+  colors: ["glowIntensity", "glowRadius", "glassBlur"],
+  typography: ["letterSpacing", "textOpacity"],
+  animation: [
+    "revealDuration",
+    "revealDelay",
+    "floatDuration",
+    "floatDistance",
+    "breatheDuration",
+  ],
+  layout: ["footerPaddingY", "separatorWidth"],
+} as const;
+
+/** 需要 hex/rgba 颜色格式校验的字段 */
+const COLOR_FIELDS = [
+  "warmPrimaryColor",
+  "ambientTopColor",
+  "ambientLeftColor",
+  "ambientRightColor",
+  "ambientCenterColor",
+] as const;
+/** 容器边线色度为 "r g b" 三通道字符串，单独校验 */
+const BORDER_CHROMA_PATTERN = /^\d{1,3}\s+\d{1,3}\s+\d{1,3}$/;
+
+function isValidColorField(field: string, value: string): boolean {
+  if (field === "borderChroma") return BORDER_CHROMA_PATTERN.test(value.trim());
+  if ((COLOR_FIELDS as readonly string[]).includes(field)) {
+    return parseColorToRgb(value) !== null;
+  }
+  return true;
+}
+
+/** 解析导入 JSON：白名单字段校验，导入值全部标记为显式覆盖 */
+export function parseThemeImport(raw: string): ThemeImportResult {
+  const text = raw.trim();
+  if (!text) return { ok: false, error: "内容为空" };
+  if (text.length > THEME_PORT_MAX_BYTES) {
+    return { ok: false, error: "文件超过 64KB 限制，请检查是否选错文件" };
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "不是合法的 JSON 文件" };
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { ok: false, error: "JSON 结构不符合主题方案格式" };
+  }
+
+  const root = data as Record<string, unknown>;
+  if (root.format !== "yyc3-theme" || root.version !== 1) {
+    return { ok: false, error: "格式标识不匹配（需要 yyc3-theme v1）" };
+  }
+
+  const config: Partial<GalleryConfig> = {};
+  let rejectedColors = 0;
+  for (const group of ["colors", "typography", "animation", "layout"] as const) {
+    const section = root[group];
+    if (!section || typeof section !== "object" || Array.isArray(section)) {
+      continue;
+    }
+    const typed = section as Record<string, unknown>;
+    for (const field of NUMBER_FIELDS[group]) {
+      const value = typed[field];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        (config as Record<string, unknown>)[field] = value;
+      }
+    }
+    if (group === "colors") {
+      for (const field of COLOR_FIELDS) {
+        const value = typed[field];
+        if (
+          typeof value === "string" &&
+          value.length <= 120 &&
+          isValidColorField(field, value)
+        ) {
+          (config as Record<string, unknown>)[field] = value;
+        } else if (value !== undefined) {
+          rejectedColors += 1;
+        }
+      }
+      const border = typed.borderChroma;
+      if (
+        typeof border === "string" &&
+        border.length <= 20 &&
+        isValidColorField("borderChroma", border)
+      ) {
+        config.borderChroma = border;
+      } else if (border !== undefined) {
+        rejectedColors += 1;
+      }
+    } else if (group === "typography") {
+      for (const field of ["fontSize", "fontWeight"] as const) {
+        const value = typed[field];
+        if (typeof value === "string" && value.length <= 20) {
+          (config as Record<string, unknown>)[field] = value;
+        }
+      }
+    }
+  }
+
+  const brand = root.brand;
+  if (brand && typeof brand === "object" && !Array.isArray(brand)) {
+    const typed = brand as Record<string, unknown>;
+    if (typeof typed.line1 === "string" && typed.line1.length <= 50) {
+      config.brandLine1 = typed.line1;
+    }
+    if (typeof typed.line2 === "string" && typed.line2.length <= 100) {
+      config.brandLine2 = typed.line2;
+    }
+  }
+  const layoutFlags = root.layout;
+  if (
+    layoutFlags &&
+    typeof layoutFlags === "object" &&
+    !Array.isArray(layoutFlags) &&
+    typeof (layoutFlags as Record<string, unknown>).enableGlowEffect ===
+      "boolean"
+  ) {
+    config.enableGlowEffect = (
+      layoutFlags as Record<string, unknown>
+    ).enableGlowEffect as boolean;
+  }
+
+  if (Object.keys(config).length === 0) {
+    return { ok: false, error: "未包含任何可应用的主题字段" };
+  }
+
+  let themeId: GalleryTheme | null = null;
+  if (typeof root.theme === "string") {
+    themeId = THEME_DEFINITIONS.some((item) => item.id === root.theme)
+      ? (root.theme as GalleryTheme)
+      : null;
+  }
+
+  const name =
+    typeof root.name === "string" && root.name.trim()
+      ? root.name.trim().slice(0, 60)
+      : "导入主题方案";
+
+  return {
+    ok: true,
+    name,
+    themeId,
+    skipped: rejectedColors,
+    config: {
+      ...config,
+      // 导入的配色/光效/边线均视为用户显式修改，优先级高于当前主题
+      visualOverrides: {
+        warmPrimary: "warmPrimaryColor" in config,
+        ambient: "ambientTopColor" in config,
+        glow: "glowIntensity" in config,
+        border: "borderChroma" in config,
+      },
+    },
+  };
+}
+
+/** 触发浏览器下载主题 JSON 文件；返回 false 表示环境不支持 */
+export function downloadThemePayload(payload: ThemePortPayload): boolean {
+  if (typeof document === "undefined" || typeof URL === "undefined") {
+    return false;
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `yyc3-theme-${payload.theme}-${Date.now()}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+/* ========================================
+   WCAG 对比度评估（纯函数）
+   ======================================== */
+
+export type Rgb = [number, number, number];
+
+export interface ParsedColor {
+  rgb: Rgb;
+  /** 不透明度为 1；rgba() 半透明色 < 1 */
+  alpha: number;
+}
+
+/** 解析 hex（#rgb/#rrggbb）与 rgb()/rgba() 颜色；不支持时返回 null */
+export function parseColorToRgb(input: string): ParsedColor | null {
+  const value = input.trim();
+  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  const body = hex?.[1];
+  if (body) {
+    if (body.length === 3) {
+      return {
+        rgb: [
+          parseInt(body.charAt(0) + body.charAt(0), 16),
+          parseInt(body.charAt(1) + body.charAt(1), 16),
+          parseInt(body.charAt(2) + body.charAt(2), 16),
+        ],
+        alpha: 1,
+      };
+    }
+    return {
+      rgb: [
+        parseInt(body.slice(0, 2), 16),
+        parseInt(body.slice(2, 4), 16),
+        parseInt(body.slice(4, 6), 16),
+      ],
+      alpha: 1,
+    };
+  }
+
+  const rgb = value.match(
+    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+)\s*)?\)$/i,
+  );
+  if (rgb) {
+    const channels: Rgb = [
+      Number(rgb[1] ?? NaN),
+      Number(rgb[2] ?? NaN),
+      Number(rgb[3] ?? NaN),
+    ];
+    if (channels.some((n) => !Number.isFinite(n) || n > 255)) return null;
+    const alpha = rgb[4] === undefined ? 1 : Number(rgb[4]);
+    if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) return null;
+    return { rgb: channels, alpha };
+  }
+  return null;
+}
+
+/** 将半透明前景按 alpha 混合到底色，返回不透明 RGB */
+export function blendOver(fg: ParsedColor, bg: Rgb): Rgb {
+  const { rgb, alpha } = fg;
+  if (alpha >= 1) return rgb;
+  return [
+    Math.round(rgb[0] * alpha + bg[0] * (1 - alpha)),
+    Math.round(rgb[1] * alpha + bg[1] * (1 - alpha)),
+    Math.round(rgb[2] * alpha + bg[2] * (1 - alpha)),
+  ];
+}
+
+/** WCAG 2.x 相对亮度 */
+export function relativeLuminance([r, g, b]: Rgb): number {
+  const channel = (raw: number) => {
+    const v = raw / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return (
+    0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+  );
+}
+
+/** WCAG 对比度：(L1 + 0.05) / (L2 + 0.05)，恒 ≥ 1 */
+export function contrastRatio(a: Rgb, b: Rgb): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  const [lighter, darker] =
+    la >= lb ? [la, lb] : [lb, la];
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+export type WcagLevel = "AAA" | "AA" | "AA-Large" | "Fail";
+
+export interface ContrastVerdict {
+  ratio: number;
+  level: WcagLevel;
+  /** 是否达到正文 AA（4.5:1） */
+  passesAA: boolean;
+}
+
+/** 评估前景/背景对比度等级（按正文文本口径；大文本阈值 3:1 记为 AA-Large） */
+export function evaluateContrast(
+  foreground: string,
+  background: string,
+): ContrastVerdict | null {
+  const bg = parseColorToRgb(background);
+  if (!bg) return null;
+  const fg = parseColorToRgb(foreground);
+  if (!fg) return null;
+  const ratio = contrastRatio(blendOver(fg, bg.rgb), bg.rgb);
+  const level: WcagLevel =
+    ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : ratio >= 3 ? "AA-Large" : "Fail";
+  return { ratio, level, passesAA: ratio >= 4.5 };
+}

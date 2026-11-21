@@ -2,6 +2,8 @@
 
 import React, { useRef, useCallback, useEffect, useState } from "react";
 import {
+  Copy,
+  Download,
   Image as ImageIcon,
   Languages,
   LayoutGrid,
@@ -9,6 +11,7 @@ import {
   Palette,
   Puzzle,
   Type,
+  Upload,
 } from "lucide-react";
 import WidgetSettings from "@/components/widgets/WidgetSettings";
 import { removeBackgroundAsset, storeBackgroundAsset } from "@/lib/asset-store";
@@ -26,6 +29,12 @@ import {
   type BreakpointVersion,
   type LayoutVersion,
 } from "@/lib/version-store";
+import {
+  buildThemePayload,
+  downloadThemePayload,
+  evaluateContrast,
+  parseThemeImport,
+} from "@/lib/theme-port";
 import { LOCALES, setLocale, t, useLocale } from "@/lib/i18n";
 
 const AMBIENT_KEYS = [
@@ -64,9 +73,12 @@ export default function ConfigPanel({
 }: ConfigPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const playerFileInputRef = useRef<HTMLInputElement>(null);
+  const themeImportInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const onToggleRef = useRef(onToggle);
   const [uploadError, setUploadError] = useState("");
+  const [portMessage, setPortMessage] = useState("");
+  const [portTone, setPortTone] = useState<"ok" | "error">("ok");
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const version = useVersion();
   const locale = useLocale();
@@ -268,6 +280,60 @@ export default function ConfigPanel({
     [readImage],
   );
 
+  const showPortMessage = useCallback((message: string, tone: "ok" | "error") => {
+    setPortMessage(message);
+    setPortTone(tone);
+  }, []);
+
+  const handleExportTheme = useCallback(() => {
+    const payload = buildThemePayload(config, version.theme);
+    if (downloadThemePayload(payload)) {
+      showPortMessage("主题方案已导出为 JSON 文件", "ok");
+    } else {
+      showPortMessage("当前环境不支持文件下载", "error");
+    }
+  }, [config, showPortMessage, version.theme]);
+
+  const handleCopyTheme = useCallback(() => {
+    const json = JSON.stringify(buildThemePayload(config, version.theme), null, 2);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(json).then(
+        () => showPortMessage("主题方案已复制到剪贴板", "ok"),
+        () => showPortMessage("复制失败，请改用导出文件", "error"),
+      );
+    } else {
+      showPortMessage("当前环境不支持剪贴板，请改用导出文件", "error");
+    }
+  }, [config, showPortMessage, version.theme]);
+
+  const handleImportTheme = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      if (file.size > 64 * 1024) {
+        showPortMessage("文件超过 64KB 限制，请检查是否选错文件", "error");
+        return;
+      }
+      void file.text().then((text) => {
+        const result = parseThemeImport(text);
+        if (!result.ok) {
+          showPortMessage(`导入失败：${result.error}`, "error");
+          return;
+        }
+        if (result.themeId) setTheme(result.themeId);
+        updateConfig(result.config);
+        showPortMessage(
+          `已应用「${result.name}」${
+            result.skipped > 0 ? `（${result.skipped} 个非法颜色字段已跳过）` : ""
+          }`,
+          "ok",
+        );
+      });
+    },
+    [showPortMessage, updateConfig],
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -435,6 +501,63 @@ export default function ConfigPanel({
                   </button>
                 );
               })}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-warm/15 bg-black/20 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <Palette size={12} className="text-warm-primary/50" />
+                <span className="text-[10px] text-white/60">主题方案导入导出</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleExportTheme}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-warm/20 bg-black/25 px-2 py-1.5 text-[10px] text-white/55 transition-colors hover:border-warm/40 hover:text-warm-primary"
+                  title="将当前主题与视觉配置导出为 JSON 文件"
+                >
+                  <Download size={11} />
+                  导出
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyTheme}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-warm/20 bg-black/25 px-2 py-1.5 text-[10px] text-white/55 transition-colors hover:border-warm/40 hover:text-warm-primary"
+                  title="复制主题方案 JSON 到剪贴板"
+                >
+                  <Copy size={11} />
+                  复制
+                </button>
+                <button
+                  type="button"
+                  onClick={() => themeImportInputRef.current?.click()}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-warm/20 bg-black/25 px-2 py-1.5 text-[10px] text-white/55 transition-colors hover:border-warm/40 hover:text-warm-primary"
+                  title="从 JSON 文件导入主题方案（64KB 以内）"
+                >
+                  <Upload size={11} />
+                  导入
+                </button>
+              </div>
+              <input
+                ref={themeImportInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleImportTheme}
+                className="hidden"
+                aria-hidden
+              />
+              {portMessage && (
+                <p
+                  role="status"
+                  className={`mt-2 text-[10px] ${
+                    portTone === "ok" ? "text-emerald-300/80" : "text-red-300/80"
+                  }`}
+                >
+                  {portMessage}
+                </p>
+              )}
+              <p className="mt-1.5 text-[9px] leading-relaxed text-white/25">
+                导出包含配色、光效、排版与动效参数；导入值将作为显式覆盖应用，不影响背景图片。
+              </p>
             </div>
 
             <div className="mt-5">
@@ -796,11 +919,17 @@ export default function ConfigPanel({
                 onChange={(v) => updateConfig({ ambientCenterColor: v })}
               />
 
-              <ColorPickerControl
-                label="主色调"
-                value={displayWarmPrimary}
-                onChange={(v) => updateConfig({ warmPrimaryColor: v })}
-              />
+              <div className="space-y-1">
+                <ColorPickerControl
+                  label="主色调"
+                  value={displayWarmPrimary}
+                  onChange={(v) => updateConfig({ warmPrimaryColor: v })}
+                />
+                <ContrastHint
+                  foreground={displayWarmPrimary}
+                  background={themeDefinition.colors["--background"]}
+                />
+              </div>
 
               <BorderChromaControl
                 value={displayBorder}
@@ -1149,6 +1278,54 @@ function ColorPickerControl({
         </span>
       </div>
     </div>
+  );
+}
+
+/* 子组件：WCAG 对比度提示（主色调相对主题背景） */
+const CONTRAST_META: Record<
+  string,
+  { label: string; className: string; note: string }
+> = {
+  AAA: {
+    label: "AAA",
+    className: "text-emerald-300/80",
+    note: "正文与大字均达标",
+  },
+  AA: {
+    label: "AA",
+    className: "text-emerald-300/70",
+    note: "正文达标",
+  },
+  "AA-Large": {
+    label: "AA·大字",
+    className: "text-amber-300/80",
+    note: "仅大号文本达标",
+  },
+  Fail: {
+    label: "未达标",
+    className: "text-red-300/80",
+    note: "建议调整颜色",
+  },
+};
+
+function ContrastHint({
+  foreground,
+  background,
+}: {
+  foreground: string;
+  background: string | undefined;
+}) {
+  const verdict = background ? evaluateContrast(foreground, background) : null;
+  if (!verdict) return null;
+  const meta = CONTRAST_META[verdict.level] ?? CONTRAST_META.Fail!;
+  return (
+    <p className="pl-0.5 text-[9px] font-mono tabular-nums">
+      <span className="text-white/30">对比主题背景 </span>
+      <span className={meta.className}>
+        {verdict.ratio.toFixed(2)}:1 · {meta.label}
+      </span>
+      <span className="ml-1 text-white/25">{meta.note}</span>
+    </p>
   );
 }
 
