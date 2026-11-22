@@ -58,6 +58,9 @@ jobs:
       - name: Docs standard check
         run: pnpm docs:check
 
+      - name: Asset budget check
+        run: pnpm assets:check
+
       - name: Security audit
         run: pnpm security:check
 
