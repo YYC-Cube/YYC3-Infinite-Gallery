@@ -11,8 +11,8 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 const ROOT = resolve(process.cwd());
 const STRICT_DIRS = [
-  join(ROOT, "docs/YYC3-团队通用-标规文档"),
-  join(ROOT, "docs/YYC3-团队通用-开发指南"),
+  join(ROOT, "docs/02-YYC3-团队通用-标规文档"),
+  join(ROOT, "docs/03-YYC3-团队通用-开发指南"),
 ];
 const SKIP_DIRS = [
   join(ROOT, "node_modules"),

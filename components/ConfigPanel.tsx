@@ -17,6 +17,7 @@ import WidgetSettings from "@/components/widgets/WidgetSettings";
 import {
   removeBackgroundAsset,
   storeBackgroundAsset,
+  storeFontAsset,
   storeLogoAsset,
 } from "@/lib/asset-store";
 import type { GalleryConfig } from "@/lib/config-store";
@@ -31,6 +32,7 @@ import {
   THEME_DEFINITIONS,
   useVersion,
   type BreakpointVersion,
+  type GalleryTheme,
   type LayoutVersion,
 } from "@/lib/version-store";
 import {
@@ -44,6 +46,7 @@ import {
   parseThemeImport,
   removeThemePreset,
   saveThemePreset,
+  suggestAccessibleColor,
   type ContrastAuditReport,
   type ThemePreset,
 } from "@/lib/theme-port";
@@ -86,6 +89,7 @@ export default function ConfigPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const playerFileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const fontFileInputRef = useRef<HTMLInputElement>(null);
   const themeImportInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const onToggleRef = useRef(onToggle);
@@ -97,6 +101,9 @@ export default function ConfigPanel({
   );
   const [presetName, setPresetName] = useState("");
   const [audit, setAudit] = useState<ContrastAuditReport | null>(null);
+  const [oklchInput, setOklchInput] = useState("");
+  const [compareThemeId, setCompareThemeId] =
+    useState<GalleryTheme>("warm-art");
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const version = useVersion();
   const locale = useLocale();
@@ -119,6 +126,25 @@ export default function ConfigPanel({
   const displayBorder = overrides.border
     ? config.borderChroma
     : (themeDefinition.colors["--border-chroma"] ?? config.borderChroma);
+  const compareDefinition =
+    THEME_DEFINITIONS.find((item) => item.id === compareThemeId) ??
+    themeDefinition;
+  const comparePanels = [
+    {
+      title: "当前生效",
+      name: themeDefinition.name,
+      background: themeDefinition.colors["--background"] ?? "",
+      primary: displayWarmPrimary,
+      accent: themeDefinition.colors["--warm-accent"] ?? "",
+    },
+    {
+      title: "对比主题",
+      name: compareDefinition.name,
+      background: compareDefinition.colors["--background"] ?? "",
+      primary: compareDefinition.colors["--warm-primary"] ?? "",
+      accent: compareDefinition.colors["--warm-accent"] ?? "",
+    },
+  ];
 
   useEffect(() => {
     applyConfigToDOM(config);
@@ -298,6 +324,11 @@ export default function ConfigPanel({
     [readImage],
   );
 
+  const showPortMessage = useCallback((message: string, tone: "ok" | "error") => {
+    setPortMessage(message);
+    setPortTone(tone);
+  }, []);
+
   const handleLogoUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -347,10 +378,71 @@ export default function ConfigPanel({
     );
   };
 
-  const showPortMessage = useCallback((message: string, tone: "ok" | "error") => {
-    setPortMessage(message);
-    setPortTone(tone);
-  }, []);
+  const handleFontUpload = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      if (!/\.(woff2?|ttf|otf)$/i.test(file.name)) {
+        setUploadError("字体支持 woff2 / woff / ttf / otf");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setUploadError("字体文件不能超过 5MB");
+        return;
+      }
+      setUploadError("");
+      const previousId = config.fontAssetId;
+      const assetId = await storeFontAsset(file);
+      if (!assetId) {
+        setUploadError("字体保存失败，请重试");
+        return;
+      }
+      if (config.fontUrl) URL.revokeObjectURL(config.fontUrl);
+      updateConfig({
+        fontAssetId: assetId,
+        fontName: file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "YYC3 Custom",
+        fontUrl: URL.createObjectURL(file),
+      });
+      if (previousId && previousId !== assetId) {
+        void removeBackgroundAsset(previousId);
+      }
+    },
+    [config.fontAssetId, config.fontUrl, updateConfig],
+  );
+
+  const handleApplyOklch = () => {
+    const value = oklchInput.trim();
+    if (!value) return;
+    const background = themeDefinition.colors["--background"] ?? "";
+    const verdict = background ? evaluateContrast(value, background) : null;
+    if (!verdict) {
+      showPortMessage("OKLch 格式无效，示例：oklch(0.62 0.26 29)", "error");
+      return;
+    }
+    updateConfig({ warmPrimaryColor: value });
+    showPortMessage(
+      `已应用 OKLch 主色（对比背景 ${verdict.ratio.toFixed(2)}:1）`,
+      "ok",
+    );
+  };
+
+  const handleFixContrast = () => {
+    const background = themeDefinition.colors["--background"] ?? "";
+    const fixed = suggestAccessibleColor(displayWarmPrimary, background);
+    if (!fixed) {
+      showPortMessage("无法解析当前主色，请先改为 hex 或 rgb 格式", "error");
+      return;
+    }
+    updateConfig({ warmPrimaryColor: fixed });
+    setAudit(
+      auditThemeContrast({
+        ...themeDefinition.colors,
+        "--warm-primary": fixed,
+      }),
+    );
+    showPortMessage(`主色已调整为 ${fixed}（达到正文 AA 4.5:1）`, "ok");
+  };
 
   const handleExportTheme = useCallback(() => {
     const payload = buildThemePayload(config, version.theme);
@@ -792,8 +884,78 @@ export default function ConfigPanel({
                       建议提高未达标项亮度或加深背景，正文目标 ≥4.5:1。
                     </p>
                   )}
+                  {audit.rows.some(
+                    (row) => row.token === "--warm-primary" && !row.passesAA,
+                  ) && (
+                    <button
+                      type="button"
+                      onClick={handleFixContrast}
+                      className="mt-2 w-full rounded-lg border border-warm/30 bg-warm/10 py-1.5 text-[10px] text-warm-primary transition-colors hover:bg-warm/20"
+                    >
+                      一键调整主色达标（AA 4.5:1）
+                    </button>
+                  )}
                 </>
               )}
+            </div>
+
+            {/* 主题分屏对比 */}
+            <div className="mt-2 rounded-xl border border-warm/15 bg-black/20 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-white/60">主题分屏对比</span>
+                <select
+                  value={compareThemeId}
+                  onChange={(event) =>
+                    setCompareThemeId(event.target.value as GalleryTheme)
+                  }
+                  aria-label="选择对比主题"
+                  className="rounded-lg border border-warm/20 bg-black/30 px-2 py-1 text-[9px] text-white/60 outline-none focus:border-warm/45"
+                >
+                  {THEME_DEFINITIONS.map((item) => (
+                    <option key={item.id} value={item.id} className="bg-[#0a0908]">
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {comparePanels.map((panel) => {
+                  const verdict = evaluateContrast(
+                    panel.primary,
+                    panel.background,
+                  );
+                  return (
+                    <div
+                      key={panel.title}
+                      className="overflow-hidden rounded-lg border border-warm/15"
+                      style={{ background: panel.background }}
+                    >
+                      <div className="space-y-1 p-2">
+                        <p className="text-[9px] text-white/35">{panel.title}</p>
+                        <p
+                          className="truncate text-[10px]"
+                          style={{ color: panel.primary }}
+                        >
+                          {panel.name}
+                        </p>
+                        <div className="flex gap-1">
+                          <span
+                            className="h-2 flex-1 rounded-full"
+                            style={{ background: panel.primary }}
+                          />
+                          <span
+                            className="h-2 flex-1 rounded-full"
+                            style={{ background: panel.accent }}
+                          />
+                        </div>
+                        <p className="font-mono text-[8px] text-white/40">
+                          主色对比 {verdict ? `${verdict.ratio.toFixed(2)}:1` : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="mt-5">
@@ -1165,6 +1327,23 @@ export default function ConfigPanel({
                   foreground={displayWarmPrimary}
                   background={themeDefinition.colors["--background"]}
                 />
+                <div className="flex gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={oklchInput}
+                    onChange={(event) => setOklchInput(event.target.value)}
+                    placeholder="高级：oklch(0.62 0.26 29)"
+                    aria-label="OKLch 主色输入"
+                    className="min-w-0 flex-1 rounded-lg border border-warm/20 bg-black/25 px-2 py-1 text-[9px] font-mono text-white/65 outline-none transition-colors placeholder:text-white/20 focus:border-warm/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyOklch}
+                    className="shrink-0 rounded-lg border border-warm/25 px-2 py-1 text-[9px] text-warm-primary transition-colors hover:bg-warm/10"
+                  >
+                    应用
+                  </button>
+                </div>
               </div>
 
               <BorderChromaControl
@@ -1200,6 +1379,58 @@ export default function ConfigPanel({
             >
               Typography
             </h3>
+
+            {/* 品牌字体上传 */}
+            <div className="mb-4 rounded-xl border border-warm/15 bg-black/20 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] text-white/60">品牌字体</span>
+                <span className="text-[9px] text-white/25">
+                  woff2 / woff / ttf / otf · ≤5MB
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => fontFileInputRef.current?.click()}
+                aria-label="上传品牌字体"
+                className="flex w-full items-center gap-3 rounded-lg border border-dashed border-warm/25 px-3 py-2.5 text-left transition-colors hover:border-warm/45 hover:bg-warm/5"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warm/10 font-[family-name:var(--font-brand,var(--font-cormorant))] text-sm text-warm-primary/80">
+                  Aa
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[11px] text-white/60">
+                    {config.fontName || "点击上传品牌字体"}
+                  </span>
+                  <span className="block text-[9px] text-white/25">
+                    应用于页脚标语；仅本机保存
+                  </span>
+                </span>
+              </button>
+              <input
+                ref={fontFileInputRef}
+                type="file"
+                accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
+                onChange={handleFontUpload}
+                className="hidden"
+              />
+              {config.fontName && (
+                <button
+                  onClick={() => {
+                    const assetId = config.fontAssetId;
+                    if (config.fontUrl) URL.revokeObjectURL(config.fontUrl);
+                    updateConfig({
+                      fontAssetId: null,
+                      fontName: "",
+                      fontUrl: null,
+                    });
+                    if (assetId) void removeBackgroundAsset(assetId);
+                  }}
+                  className="mt-2 text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                >
+                  移除品牌字体
+                </button>
+              )}
+            </div>
 
             {/* 品牌 Logo 上传 */}
             <div className="mb-4 rounded-xl border border-warm/15 bg-black/20 p-3">
@@ -1270,6 +1501,24 @@ export default function ConfigPanel({
                     unit="px"
                     onChange={(v) => updateConfig({ logoRadius: v })}
                   />
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] text-white/40">
+                      点击跳转链接（可选）
+                    </span>
+                    <input
+                      type="text"
+                      value={config.logoLink}
+                      onChange={(event) =>
+                        updateConfig({ logoLink: event.target.value })
+                      }
+                      maxLength={200}
+                      placeholder="https://yyc3.top 或 /about"
+                      className="w-full rounded-lg border border-warm/20 bg-black/25 px-2.5 py-1.5 text-[10px] text-white/70 outline-none transition-colors placeholder:text-white/20 focus:border-warm/50"
+                    />
+                    <span className="mt-1 block text-[9px] text-white/25">
+                      仅支持 http(s) 与站内路径；留空则 Logo 不可点击。
+                    </span>
+                  </label>
                   <button
                     onClick={() => {
                       const assetId = config.logoAssetId;
@@ -1588,7 +1837,7 @@ function ColorPickerControl({
       <div className="flex items-center gap-2">
         <input
           type="color"
-          value={value.startsWith("rgba") ? "#d4a574" : value}
+          value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#d4a574"}
           onChange={(e) => onChange(e.target.value)}
           className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"
         />

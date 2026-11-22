@@ -55,7 +55,10 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-async function storeAsset(file: File, prefix: "bg" | "logo"): Promise<string | null> {
+async function storeAsset(
+  file: File,
+  prefix: "bg" | "logo" | "font",
+): Promise<string | null> {
   const id = `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   try {
     const db = await openDatabase();
@@ -89,6 +92,11 @@ export async function storeBackgroundAsset(file: File): Promise<string | null> {
 /** 品牌 Logo 与背景共用同一资源仓库，仅 ID 前缀区分 */
 export async function storeLogoAsset(file: File): Promise<string | null> {
   return storeAsset(file, "logo");
+}
+
+/** 自定义品牌字体文件（woff2/woff/ttf/otf）同样进入资源仓库 */
+export async function storeFontAsset(file: File): Promise<string | null> {
+  return storeAsset(file, "font");
 }
 
 export async function loadBackgroundAsset(id: string): Promise<Blob | null> {

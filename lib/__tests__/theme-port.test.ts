@@ -24,6 +24,7 @@ import {
   relativeLuminance,
   removeThemePreset,
   saveThemePreset,
+  suggestAccessibleColor,
   THEME_PORT_MAX_BYTES,
 } from "../theme-port";
 
@@ -367,6 +368,13 @@ describe("Logo 配置归一化", () => {
     expect(DEFAULT_CONFIG.logoSize).toBe(48);
     expect(DEFAULT_CONFIG.logoOpacity).toBe(1);
     expect(DEFAULT_CONFIG.logoRadius).toBe(0);
+    expect(DEFAULT_CONFIG.logoLink).toBe("");
+  });
+
+  test("默认配置应包含品牌字体字段且未启用", () => {
+    expect(DEFAULT_CONFIG.fontAssetId).toBeNull();
+    expect(DEFAULT_CONFIG.fontName).toBe("");
+    expect(DEFAULT_CONFIG.fontUrl).toBeNull();
   });
 
   test("旧配置缺少 Logo 字段时应补齐默认值", () => {
@@ -419,6 +427,49 @@ describe("颜色解析与对比度", () => {
   test("contrastRatio 黑白为 21，同色为 1", () => {
     expect(contrastRatio([0, 0, 0], [255, 255, 255])).toBeCloseTo(21, 1);
     expect(contrastRatio([120, 120, 120], [120, 120, 120])).toBeCloseTo(1, 5);
+  });
+
+  test("parseColorToRgb 应支持 OKLch（含 alpha 与百分比亮度）", () => {
+    const red = parseColorToRgb("oklch(0.628 0.2577 29.23)");
+    expect(red).not.toBeNull();
+    expect(red!.rgb[0]).toBeGreaterThan(240);
+    expect(red!.rgb[1]).toBeLessThan(40);
+    expect(red!.rgb[2]).toBeLessThan(40);
+
+    const percent = parseColorToRgb("oklch(62.8% 0.2577 29.23)");
+    expect(percent!.rgb[0]).toBeGreaterThan(240);
+
+    const alpha = parseColorToRgb("oklch(0.628 0.2577 29.23 / 50%)");
+    expect(alpha!.alpha).toBeCloseTo(0.5, 2);
+
+    expect(parseColorToRgb("oklch(foo)")).toBeNull();
+    expect(parseColorToRgb("oklch(0.5 0.2 120 / 2)")).toBeNull();
+  });
+
+  test("suggestAccessibleColor 应给出达到目标对比度的替代色", () => {
+    // 深色背景上的低对比灰色 → 提亮
+    const fixed = suggestAccessibleColor("#2a2a2a", "#0a0908");
+    expect(fixed).not.toBeNull();
+    const verdict = evaluateContrast(fixed!, "#0a0908");
+    expect(verdict!.ratio).toBeGreaterThanOrEqual(4.5);
+
+    // 浅色背景上的浅灰 → 加深
+    const darkened = suggestAccessibleColor("#dddddd", "#ffffff");
+    expect(evaluateContrast(darkened!, "#ffffff")!.ratio).toBeGreaterThanOrEqual(
+      4.5,
+    );
+
+    expect(suggestAccessibleColor("not-a-color", "#000")).toBeNull();
+    expect(suggestAccessibleColor("#fff", "bad")).toBeNull();
+  });
+
+  test("审计可识别 OKLch 主色的对比度", () => {
+    const report = auditThemeContrast({
+      "--background": "#0a0908",
+      "--warm-primary": "oklch(0.628 0.2577 29.23)",
+    });
+    expect(report.total).toBe(1);
+    expect(report.rows[0]?.token).toBe("--warm-primary");
   });
 
   test("evaluateContrast 应输出正确 WCAG 等级", () => {

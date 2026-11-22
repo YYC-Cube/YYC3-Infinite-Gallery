@@ -64,6 +64,13 @@ export interface GalleryConfig {
   logoOpacity: number;
   /** 圆角（px） */
   logoRadius: number;
+  /** 点击跳转链接（留空不可点击） */
+  logoLink: string;
+
+  /* 自定义品牌字体（资产存 IndexedDB，fontUrl 仅运行时预览） */
+  fontAssetId: string | null;
+  fontName: string;
+  fontUrl: string | null;
 
   /* 排版设置 */
   fontSize: string;
@@ -124,6 +131,11 @@ export const DEFAULT_CONFIG: GalleryConfig = {
   logoSize: 48,
   logoOpacity: 1,
   logoRadius: 0,
+  logoLink: "",
+
+  fontAssetId: null,
+  fontName: "",
+  fontUrl: null,
 
   fontSize: "base",
   fontWeight: "light",
@@ -205,6 +217,8 @@ export function saveConfig(config: GalleryConfig): void {
         : config.playerBackgroundImage,
       // Logo 同背景策略：有 assetId 时只存引用，避免 DataURL 占用配额
       logoImage: config.logoAssetId ? null : config.logoImage,
+      // 字体对象地址为运行时产物，永不持久化
+      fontUrl: null,
     };
     localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(persisted));
     void hostStorageSet(CONFIG_STORAGE_KEY, persisted);
@@ -262,7 +276,18 @@ export async function hydrateLogo(config: GalleryConfig): Promise<GalleryConfig>
   };
 }
 
-/** 同时恢复页面背景、媒体空间背景与品牌 Logo（三者均以 IndexedDB 为真实来源） */
+/** 恢复品牌字体对象地址（IndexedDB 为真实来源） */
+export async function hydrateFont(config: GalleryConfig): Promise<GalleryConfig> {
+  if (config.fontUrl || !config.fontAssetId) return config;
+  const blob = await loadBackgroundAsset(config.fontAssetId);
+  if (!blob) return config;
+  return {
+    ...config,
+    fontUrl: createHydratedUrl(blob),
+  };
+}
+
+/** 同时恢复页面背景、媒体空间背景、品牌 Logo 与品牌字体 */
 export async function hydrateBackgrounds(
   config: GalleryConfig,
 ): Promise<GalleryConfig> {
@@ -274,7 +299,8 @@ export async function hydrateBackgrounds(
     }
   }
   next = await hydratePlayerBackground(next);
-  return hydrateLogo(next);
+  next = await hydrateLogo(next);
+  return hydrateFont(next);
 }
 
 export function resetConfig(): GalleryConfig {
@@ -342,5 +368,19 @@ export function applyConfigToDOM(config: GalleryConfig): void {
     document.body.classList.add("custom-background-active");
   } else {
     document.body.classList.remove("custom-background-active");
+  }
+
+  // 自定义品牌字体：注入 @font-face 并写入 --font-brand（缺失时回退 cormorant）
+  const fontStyleId = "yyc3-custom-font";
+  const existing = document.getElementById(fontStyleId);
+  if (config.fontUrl && config.fontName.trim()) {
+    const style = (existing ?? document.createElement("style")) as HTMLStyleElement;
+    style.id = fontStyleId;
+    style.textContent = `@font-face{font-family:"${config.fontName.replace(/"/g, "")}";src:url("${config.fontUrl}");font-display:swap;}`;
+    if (!existing) document.head.appendChild(style);
+    root.style.setProperty("--font-brand", `"${config.fontName.replace(/"/g, "")}"`);
+  } else {
+    existing?.remove();
+    root.style.removeProperty("--font-brand");
   }
 }

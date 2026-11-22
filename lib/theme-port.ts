@@ -393,9 +393,67 @@ export interface ParsedColor {
   alpha: number;
 }
 
-/** 解析 hex（#rgb/#rrggbb）与 rgb()/rgba() 颜色；不支持时返回 null */
+/** OKLch → sRGB（含色域裁剪），用于审计与对比度计算 */
+function oklchToRgb(L: number, C: number, H: number, alpha: number): ParsedColor {
+  const h = (H * Math.PI) / 180;
+  const a = C * Math.cos(h);
+  const b = C * Math.sin(h);
+
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.291485548 * b;
+  const l = l_ ** 3;
+  const m = m_ ** 3;
+  const s = s_ ** 3;
+
+  const linear = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+  const toSrgb = (value: number) => {
+    const v = value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
+    return Math.round(Math.min(1, Math.max(0, v)) * 255);
+  };
+  return {
+    rgb: [toSrgb(linear[0] ?? 0), toSrgb(linear[1] ?? 0), toSrgb(linear[2] ?? 0)],
+    alpha,
+  };
+}
+
+/** 解析 hex（#rgb/#rrggbb）、rgb()/rgba() 与 oklch() 颜色；不支持时返回 null */
 export function parseColorToRgb(input: string): ParsedColor | null {
   const value = input.trim();
+
+  const oklch = value.match(
+    /^oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)(?:deg)?\s*(?:\/\s*([\d.]+)(%?))?\s*\)$/i,
+  );
+  if (oklch) {
+    const rawL = Number(oklch[1]);
+    const L = oklch[2] === "%" || rawL > 1 ? rawL / 100 : rawL;
+    const C = Number(oklch[3]);
+    const H = Number(oklch[4]);
+    let alpha = 1;
+    if (oklch[5] !== undefined) {
+      const rawA = Number(oklch[5]);
+      alpha = oklch[6] === "%" ? rawA / 100 : rawA;
+    }
+    if (
+      !Number.isFinite(L) ||
+      !Number.isFinite(C) ||
+      !Number.isFinite(H) ||
+      !Number.isFinite(alpha) ||
+      L < 0 ||
+      L > 1 ||
+      C < 0 ||
+      alpha < 0 ||
+      alpha > 1
+    ) {
+      return null;
+    }
+    return oklchToRgb(L, C, H, alpha);
+  }
+
   const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
   const body = hex?.[1];
   if (body) {
@@ -468,7 +526,6 @@ export function contrastRatio(a: Rgb, b: Rgb): number {
 }
 
 export type WcagLevel = "AAA" | "AA" | "AA-Large" | "Fail";
-
 export interface ContrastVerdict {
   ratio: number;
   level: WcagLevel;
@@ -492,9 +549,49 @@ export function evaluateContrast(
 }
 
 /* ========================================
-   批量对比度审计
+   无障碍修复建议
    ======================================== */
 
+function rgbToHex([r, g, b]: Rgb): string {
+  return `#${[r, g, b]
+    .map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/**
+ * 为前景色给出可达标（默认正文 AA 4.5:1）的替代色：
+ * 深色背景下向白色提亮，浅色背景下向黑色加深，保持色相近似。
+ * 无法解析时返回 null。
+ */
+export function suggestAccessibleColor(
+  foreground: string,
+  background: string,
+  target = 4.5,
+): string | null {
+  const bg = parseColorToRgb(background);
+  const fg = parseColorToRgb(foreground);
+  if (!bg || !fg) return null;
+  const fgRgb = blendOver(fg, bg.rgb);
+  const lighten = relativeLuminance(bg.rgb) < 0.5;
+  const extreme: Rgb = lighten ? [255, 255, 255] : [0, 0, 0];
+
+  for (let step = 1; step <= 50; step += 1) {
+    const t = step / 50;
+    const candidate: Rgb = [
+      fgRgb[0] + (extreme[0] - fgRgb[0]) * t,
+      fgRgb[1] + (extreme[1] - fgRgb[1]) * t,
+      fgRgb[2] + (extreme[2] - fgRgb[2]) * t,
+    ];
+    if (contrastRatio(candidate, bg.rgb) >= target) {
+      return rgbToHex(candidate);
+    }
+  }
+  return rgbToHex(extreme);
+}
+
+/* ========================================
+   批量对比度审计
+   ======================================== */
 export interface ContrastAuditRow {
   /** 主题令牌键名（如 --warm-primary） */
   token: string;

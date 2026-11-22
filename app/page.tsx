@@ -49,6 +49,11 @@ export default function Home() {
   const locale = useLocale();
   const focusRef = useRef<{ src: string; since: number } | null>(null);
 
+  // Logo 链接：仅允许 http(s) 与站内路径，避免 javascript: 等危险协议
+  const logoHref = config.logoLink.trim();
+  const logoExternal = /^https?:\/\//i.test(logoHref);
+  const logoHrefSafe = logoExternal || logoHref.startsWith("/");
+
   // 服务端与首次水合使用固定顺序，挂载后再按历史偏好排序一次
   const baseImages = useMemo(
     () =>
@@ -78,7 +83,8 @@ export default function Home() {
       if (
         hydrated.backgroundImage !== savedConfig.backgroundImage ||
         hydrated.playerBackgroundImage !== savedConfig.playerBackgroundImage ||
-        hydrated.logoImage !== savedConfig.logoImage
+        hydrated.logoImage !== savedConfig.logoImage ||
+        hydrated.fontUrl !== savedConfig.fontUrl
       ) {
         setConfig(hydrated);
       }
@@ -261,18 +267,41 @@ export default function Home() {
         <div className="relative px-4 pt-4 sm:pt-6">
           {config.logoImage && (
             <div className="mb-3 flex justify-center">
-              <img
-                src={config.logoImage}
-                alt={config.brandLine1.trim() || "YYC³ 品牌标识"}
-                draggable={false}
-                className="w-auto select-none object-contain"
-                style={{
-                  height: config.logoSize,
-                  opacity: config.logoOpacity,
-                  borderRadius: config.logoRadius,
-                  filter: "drop-shadow(0 3px 12px rgba(0, 0, 0, 0.35))",
-                }}
-              />
+              {logoHrefSafe ? (
+                <a
+                  href={logoHref}
+                  target={logoExternal ? "_blank" : undefined}
+                  rel={logoExternal ? "noopener noreferrer" : undefined}
+                  aria-label="品牌链接"
+                  className="transition-opacity hover:opacity-80"
+                >
+                  <img
+                    src={config.logoImage}
+                    alt={config.brandLine1.trim() || "YYC³ 品牌标识"}
+                    draggable={false}
+                    className="w-auto select-none object-contain"
+                    style={{
+                      height: config.logoSize,
+                      opacity: config.logoOpacity,
+                      borderRadius: config.logoRadius,
+                      filter: "drop-shadow(0 3px 12px rgba(0, 0, 0, 0.35))",
+                    }}
+                  />
+                </a>
+              ) : (
+                <img
+                  src={config.logoImage}
+                  alt={config.brandLine1.trim() || "YYC³ 品牌标识"}
+                  draggable={false}
+                  className="w-auto select-none object-contain"
+                  style={{
+                    height: config.logoSize,
+                    opacity: config.logoOpacity,
+                    borderRadius: config.logoRadius,
+                    filter: "drop-shadow(0 3px 12px rgba(0, 0, 0, 0.35))",
+                  }}
+                />
+              )}
             </div>
           )}
           <p
@@ -285,6 +314,8 @@ export default function Home() {
 							gpu-accelerated
 						"
             style={{
+              fontFamily:
+                "var(--font-brand, var(--font-cormorant)), serif",
               fontSize:
                 config.fontSize === "xs"
                   ? "0.75rem"

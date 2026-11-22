@@ -123,3 +123,8 @@ storyboard
 ffmpeg
 transcode
 transcoding
+# 代码片段中的缩写
+nums
+rggbb
+oklch
+woff
