@@ -1,0 +1,202 @@
+---
+title: YYC³ 自主媒体空间实施落地说明
+description: 可拆分音视频、独立实例、播放器背景、小组件、PWA 与宿主桥接的实施记录
+author: YYC³ Team
+version: 1.0.0
+status: Web/PWA 基线已落地
+created: 2026-11-19
+updated: 2026-11-19
+---
+
+# YYC³ 自主媒体空间实施落地说明
+
+## 📋 文档说明
+
+本文记录 [可拆分音视频与自主组件空间设计](./YYC3-项目规划-可拆分音视频与自主组件空间设计.md) 在 `YYC3-Infinite-Gallery` 中的实施结果、关键决策、验证证据和剩余边界。
+
+当前完成的是可直接运行和构建的 Web/PWA 基线，不是仅设计稿。
+
+## 一、需求落地矩阵
+
+| 需求             | 实施结果 | 主要实现                                                                                |
+| ---------------- | -------- | --------------------------------------------------------------------------------------- |
+| 可拆分、可合并   | 已完成   | 统一界面与独立浮窗共享同一组会话；切换只改布局，不重建媒体 DOM                          |
+| 视频横竖屏自适应 | 已完成   | 根据媒体元数据标记方向，使用 `object-fit: contain`，不裁切、不拉伸                      |
+| 多开播放         | 已完成   | 最多 4 个视频会话；新增实例自动选择不同内置视频                                         |
+| 独立控制         | 已完成   | 音频、每个视频各自拥有进度、播放、音量、静音、循环和随机状态                            |
+| 开源播放器组件   | 已完成   | ArtPlayer 5.4 作为视频渲染引擎，项目控制层统一多形态与状态                              |
+| 自定义播放器背景 | 已完成   | 设置面板上传、预览、透明度、模糊、移除；配置仅保存 `assetId`                            |
+| 预设小组件       | 已完成   | 时间、日历、天气、随手记；启用、拖拽、缩放、形状、持久化、离线降级                      |
+| 多端与宿主机架构 | 部分完成 | Web/PWA 与移动响应式完成；宿主桥接客户端、离线队列和 API 契约完成，宿主服务端待独立部署 |
+
+## 二、核心实现
+
+### 2.1 媒体会话
+
+- `lib/media-space/store.ts`
+  - `MediaSessionState`：独立队列、当前曲目、进度、播放、音量、静音、循环、随机、形态和方向。
+  - 使用 `useSyncExternalStore` 订阅。
+  - 状态持久化到 `yyc3-media-space-v1`，并镜像到宿主存储。
+  - 页面恢复时停止自动播放，只恢复曲目、位置、音量与布局。
+- `components/media-space/MediaSpace.tsx`
+  - 统一界面与拆分窗口共用 `SessionWindow` 实例。
+  - 桌面拆分最多平铺两个视频，第三路自动进入统一界面。
+  - 小屏自动采用统一界面，不改写桌面的拆分偏好。
+- `components/media-space/SessionWindow.tsx`
+  - 每个实例独立标题栏、队列、进度、音量、循环、随机、上传和移除。
+  - Pointer Capture 拖拽和缩放，按当前视口裁剪边界。
+- `components/media-space/VideoEngine.tsx`
+  - 一个视频会话对应一个 ArtPlayer 实例。
+  - 原生媒体事件同步进度、时长、方向、结束和错误，避免依赖引擎 ready 时序。
+  - 自定义控制驱动底层媒体元素，支持画中画与容器全屏。
+
+### 2.2 播放器形态
+
+- 视频：`cinema`、`standard`、`minimal`。
+- 音频：`vinyl`、`minimal`。
+- 形态只改变布局、背景和信息密度，不销毁会话。
+- ArtPlayer 默认控制条、遮罩和加载层已隐藏，避免与项目控制重复。
+
+### 2.3 背景资源
+
+- `lib/asset-store.ts` 使用 IndexedDB 保存背景 Blob。
+- 配置新增 `playerBackgroundAssetId`，`playerBackgroundImage` 仅作为运行时预览。
+- `saveConfig` 不透传大图 Data URL。
+- 浏览器不支持 Blob IndexedDB 时，降级到独立键 `yyc3-bg-asset:{id}`。
+- 页面刷新时从 `assetId` 恢复对象 URL。
+
+### 2.4 页面组件
+
+- `lib/widget-store.ts`
+  - 每个组件独立启用状态、坐标、尺寸、层级、迷你状态、形状和便签内容。
+  - 持久化键：`yyc3-widget-space-v1`。
+  - 默认全部关闭，由设置面板主动启用。
+- `components/widgets/WidgetLayer.tsx`
+  - 时钟每秒刷新；日历使用本地日期；便签编辑即保存。
+  - 天气使用 Open-Meteo，默认杭州；15 分钟刷新，支持手动重试与缓存。
+  - 拖拽、八向中的右下缩放、层级提升、覆盖层允许重叠。
+  - 圆形、圆角方形、横向胶囊、竖向胶囊；按组件能力过滤。
+- `components/widgets/WidgetSettings.tsx`
+  - 在 Design Studio 内启用/禁用，并展示数据来源与刷新机制。
+
+### 2.5 PWA 与宿主桥接
+
+- `public/sw.js`
+  - 应用壳、Next 静态 JS/CSS/字体、画廊图片和图标预缓存。
+  - 媒体文件、Range 请求和宿主 API 绕过缓存。
+  - 导航网络优先，3.5 秒超时回退缓存，再回退 `/offline.html`。
+- `scripts/generate-sw-assets.mjs`
+  - `postbuild` 自动扫描构建产物，生成 `out/sw-assets.js`。
+- `components/PWAProvider.tsx`
+  - 生产环境注册 Service Worker。
+  - 探测宿主，显示离线或不兼容状态。
+- `lib/host-bridge.ts`
+  - 能力协商、网络代理、存储读写、待同步 outbox。
+  - 无宿主时直连和本地缓存降级。
+
+## 三、持久化与契约
+
+| 键 / 接口                             | 内容                         |
+| ------------------------------------- | ---------------------------- |
+| `yyc3-media-space-v1`                 | 会话、曲目、窗口、模式和音量 |
+| `yyc3-widget-space-v1`                | 组件启用、布局、形状和便签   |
+| `yyc3-gallery-config`                 | 页面与媒体空间外观配置       |
+| `yyc3-gallery-assets` / `backgrounds` | IndexedDB 背景 Blob          |
+| `yyc3-weather-hangzhou-v1`            | 最近天气缓存                 |
+| `yyc3-host-outbox-v1`                 | 宿主离线待同步队列           |
+| `GET /v1/capabilities`                | 宿主能力与版本               |
+| `POST /v1/network/fetch`              | 白名单网络代理               |
+| `GET/PUT /v1/storage/:key`            | 统一配置存储                 |
+
+## 四、验证结果
+
+### 4.1 构建门禁
+
+- `pnpm typecheck`：通过。
+- 新增与修改模块 ESLint：通过。
+- `pnpm build`：通过，静态导出成功。
+- `node --check public/sw.js`：通过。
+- `pnpm docs:check`：通过。
+- 文档检查已排除第三方源码库和符号链接，避免仓库内参考代码阻断项目检查。
+
+### 4.2 浏览器验收
+
+- 合并后两个视频实例数保持为 2，首个 `video` DOM 元素引用不变，播放时间继续增长。
+- 两个视频可同时播放：首实例音量 `0.55`，第二实例音量 `0.2`，音频音量 `0.72`，互不影响。
+- 横屏视频 `1280×720` 被识别为 landscape，计算样式为 `object-fit: contain`。
+- 桌面 `1280×720` 下双视频并排，尺寸约 `427×536`，无重叠。
+- 第三路视频自动切换统一界面，三个实例均可见。
+- 移动端 `390×844` 自动使用统一界面，隐藏无效拆分按钮。
+- 组件拖拽坐标从 `(24, 500)` 持久化为 `(49, 533)`。
+- 时间组件缩为横向胶囊后尺寸 `190×68`，形状与最小化状态写入存储。
+- 天气组件可自动获得数据、写回缓存并手动刷新。
+- 背景上传后配置体积约 `725B`，不再包含约 `842KB` 的大图；刷新后通过 assetId 正确恢复。
+- Chromium 生产构建中 Service Worker 激活，预缓存约 50 个应用资源，包含应用壳、JS/CSS、字体、图标与画廊图片；在线首屏无资源 404。
+- 受控页面在服务器停止后可通过 `fetch('/')` 从 Service Worker 取得完整应用壳，说明缓存与处理逻辑本身可命中。
+
+### 4.3 离线导航风险
+
+- Playwright Chromium 在停止静态服务器后执行整页导航，仍显示浏览器自身错误页；同一页面内通过 Service Worker `fetch('/')` 可取回缓存应用壳。
+- 该现象可能来自自动化环境的导航拦截差异，但在真机验证前不能宣称“离线冷启动 100% 完成”。
+- 正式发布前必须在目标 HTTPS 环境执行：首次在线加载 → 等待 SW 激活 → 关闭网络 → 新开页面/整页重载 → 检查应用壳与缓存资源。
+- 当前 Service Worker 已采用缓存优先导航和异常兜底；若真机仍失败，需要继续排查部署层缓存头、Service Worker 控制范围和导航预加载。
+
+## 五、关键决策
+
+### ADR-001：当前视频引擎采用 ArtPlayer 5.4
+
+**背景**：项目需要多个独立视频实例、自定义控制、稳定切源和与统一工作区分离的生命周期。
+
+**决策**：采用 ArtPlayer 作为视频渲染引擎，隐藏其默认控制层，由 YYC³ 会话层驱动底层媒体元素。
+
+**原因**：
+
+- 多实例生命周期边界清晰；
+- 支持自定义控制、画中画和全屏；
+- 当前不依赖服务端或 Next API；
+- 可与原生媒体事件稳定同步。
+
+**后续**：Video.js 10 保留为同适配层下的升级候选，不作为当前构建依赖。
+
+### ADR-002：默认关闭页面组件
+
+组件仍全部可用，但首次进入不自动叠加在媒体空间之上。用户在 Design Studio 中启用后，组件和媒体空间各自维持独立层级与位置。
+
+## 六、剩余边界
+
+1. 宿主机服务端未包含在静态导出产物中；当前已完成客户端协议、能力探测、存储镜像和离线队列，部署端需按接口契约实现。
+2. 真正跨浏览器窗口 Popup 未启用；当前独立窗口为应用内浮窗，保证媒体实例不重建。
+3. 原生移动容器未加入；当前移动端为响应式 Web/PWA。
+4. 内置 MP3/MP4 不自动离线缓存，仅在用户明确保存后扩展；避免 PWA 缓存被大媒体快速占满。
+5. 天气默认使用杭州坐标；后续应通过宿主配置城市、定位授权和供应商密钥。
+6. React Grid Layout 与 dnd kit 未引入；当前媒体窗口使用 Pointer 自研布局，组件仅需自由定位，后续若增加网格停靠再评估。
+7. PWA 缓存资源已就绪，但整页离线导航仍需在目标 HTTPS 真机完成最终验收；自动化环境存在浏览器级导航拦截差异。
+8. 设计文档首批组件清单共 7 类，当前落地 4 类（时钟/日历/天气/便签）；「音乐播放器组件」「视频播放器组件」「宿主状态组件」未实现——音乐与视频能力已由媒体空间独立实例承载，宿主状态展示依赖宿主服务端部署，属范围决策而非遗漏，待组件空间二次扩展时评估。
+
+---
+
+## 七、增补记录（2026-11-22 窗口治理与解码兼容批次）
+
+在「剩余边界」基础上，本批次完成以下窗口能力升级，需求落地矩阵中「可拆分、可合并」「独立控制」「多开播放」三项能力增强：
+
+1. **统一最小化任务坞**：窗口状态从 SessionWindow 本地 state 提升为 store 的 `windowState` 字段（normal / minimized / maximized，随 `yyc3-media-space-v1` 持久化）。音频与全部视频实例最小化后统一收纳至底部任务坞（`role="toolbar"`），每项支持播放/暂停与单击还原，多容器时提供「全部还原」。dock 药丸保留 `data-session-kind` / `data-window-mode` 属性，E2E 断言兼容。
+2. **最大化修复**：合并（unified）模式根容器 `.media-space-root[data-mode="unified"]` 存在 `overflow:hidden`，会裁剪 fixed 定位子元素导致最大化形同未放大。最大化浮层现经 `createPortal` 渲染到 `document.body`，逃逸裁剪与层叠上下文；竖屏视频最大化时同步解除 `max-w-[min(100%,48vh)]` 宽度上限。
+3. **视频解码兼容**：内建 8 个 MP4 原为 HEVC(H.265) 编码，Chrome/Firefox/Edge 无法解码（界面表现为「视频加载或解码失败」）。已全部转码为 H.264 High Profile（`-preset slow -crf 24 -pix_fmt yuv420p -movflags +faststart`，音频 AAC 96k），体积由 13.6MB 增至约 26MB，属解码兼容性换体积的显式决策。
+4. **错误分型与重试**：VideoEngine 按 `MediaError.code` 分型提示（`MEDIA_ERR_SRC_NOT_SUPPORTED` → 编码不支持 / `MEDIA_ERR_DECODE` → 数据损坏 / `MEDIA_ERR_NETWORK` → 网络异常），并提供「重试加载」按钮（重新 `load()` 并按需恢复播放）。
+5. **资产目录更名**：`artist-3:4 / artist-4:3 / mv-3:4 / mv-4:3` 全部更名为 `3x4 / 4x3` 格式——upload-artifact（v4+）制品校验禁止文件名含冒号，且冒号对 NTFS 等文件系统不安全；显示文案「影像典藏 · 3:4」不受影响。
+
+验证：16 套件 / 177 单元测试 + 7 E2E 全绿（含「媒体窗口最小化、最大化与还原」关键路径）；CI（Quality Gate → Build → E2E → Deploy）全链路通过并已部署 Pages。
+
+---
+
+**最后更新**: 2026-11-19  
+**维护者**: YYC³ Team
+
+<p align="center">
+  <b>YYC³</b>（YanYuCloudCube™ · 注册商标）<br>
+  言启象限 | 语枢未来<br>
+  <i>Words Initiate Quadrants, Language Serves as Core for Future</i><br>
+  万象归元于云枢 | 深栈智启新纪元<br>
+  <i>All things converge in cloud pivot; Deep stacks ignite a new era of intelligence</i><br>
+  <sub>© 2026 YanYuCloudCube™（YYC³）· <a href="mailto:admin@0379.email">admin@0379.email</a></sub>
+</p>

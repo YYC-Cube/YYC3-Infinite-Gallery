@@ -1,0 +1,185 @@
+# YYC3-项目治理-第三方组件台账
+
+## 📋 文档说明
+
+本文档登记 YYC³ Infinite Gallery 的第三方依赖、组件基座与外部参考项目，明确许可证、用途、引入边界与复核节奏。任何新增或升级第三方组件前必须先登记本文档，禁止先引入后补账。
+
+| 项目 | 说明 |
+| ---- | ---- |
+| 治理对象 | 直接依赖 39 个（dependencies）+ 组件基座 46 个（components/ui）+ 外部参考项目 10 个 + 本地 monorepo 17 包 |
+| 基准提交 | `908b046`（2026-11-22，C-01 死依赖移除前） |
+| 许可证核验方式 | 读取 `node_modules/<pkg>/package.json` 的 `license` 字段逐包实测 |
+| 复核节奏 | 每季度；新增依赖即时登记；`pnpm security:check` 随 CI 每次执行 |
+| 关联文档 | [12 技术评估报告](./12-YYC3-项目调研-首次全维度技术评估报告.md)、[复用对照矩阵](./YYC3-项目规划-组件选型/YYC3-项目规划-开源组件库复用对照矩阵.md) |
+| 版本 | v1.0.0 |
+
+---
+
+## 1. 直接依赖许可证台账（39 个）
+
+### 1.1 Radix UI 原语（27 个，MIT）
+
+| 包 | 版本 | 许可证 | 用途 |
+| ---- | ---- | ---- | ---- |
+| @radix-ui/react-accordion | ^1.3.1 | MIT | 手风琴 |
+| @radix-ui/react-alert-dialog | ^1.2.1 | MIT | 警告对话框 |
+| @radix-ui/react-aspect-ratio | ^1.2.0 | MIT | 宽高比 |
+| @radix-ui/react-avatar | ^1.3.1 | MIT | 头像 |
+| @radix-ui/react-checkbox | ^1.4.1 | MIT | 复选框 |
+| @radix-ui/react-collapsible | ^1.2.1 | MIT | 折叠 |
+| @radix-ui/react-context-menu | ^2.4.1 | MIT | 右键菜单 |
+| @radix-ui/react-dialog | ^1.3.1 | MIT | 对话框（设置面板基座） |
+| @radix-ui/react-dropdown-menu | ^2.2.1 | MIT | 下拉菜单 |
+| @radix-ui/react-hover-card | ^1.2.1 | MIT | 悬浮卡片 |
+| @radix-ui/react-label | ^2.1.17 | MIT | 表单标签 |
+| @radix-ui/react-menubar | ^1.2.1 | MIT | 菜单栏 |
+| @radix-ui/react-navigation-menu | ^1.4.1 | MIT | 导航菜单 |
+| @radix-ui/react-popover | ^1.3.1 | MIT | 浮层 |
+| @radix-ui/react-progress | ^1.2.1 | MIT | 进度条 |
+| @radix-ui/react-radio-group | ^1.5.1 | MIT | 单选组 |
+| @radix-ui/react-scroll-area | ^1.4.0 | MIT | 滚动区 |
+| @radix-ui/react-select | ^2.4.1 | MIT | 选择器 |
+| @radix-ui/react-separator | ^1.2.0 | MIT | 分隔线 |
+| @radix-ui/react-slider | ^1.6.1 | MIT | 滑块（音量/进度） |
+| @radix-ui/react-slot | ^1.5.0 | MIT | asChild 插槽 |
+| @radix-ui/react-switch | ^1.4.1 | MIT | 开关 |
+| @radix-ui/react-tabs | ^1.2.1 | MIT | 标签页 |
+| @radix-ui/react-toast | ^1.3.1 | MIT | 轻提示 |
+| @radix-ui/react-toggle | ^1.2.1 | MIT | 切换按钮 |
+| @radix-ui/react-toggle-group | ^1.2.1 | MIT | 切换组 |
+| @radix-ui/react-tooltip | ^1.4.1 | MIT | 工具提示 |
+
+### 1.2 核心运行依赖（12 个）
+
+| 包 | 版本 | 许可证 | 用途 | 边界说明 |
+| ---- | ---- | ---- | ---- | ---- |
+| next | ^16.4.6 | MIT | 框架（App Router + 静态导出） | — |
+| react / react-dom | ^19.2.7 | MIT | UI 运行时 | 严格模式 TS |
+| three | ^0.185.1 | MIT | 3D 渲染 | 仅画廊场景 |
+| @react-three/fiber | ^9.6.1 | MIT | React 渲染器 | 仅画廊场景 |
+| @react-three/drei | ^10.7.7 | MIT | R3F 工具集 | 仅画廊场景 |
+| artplayer | ^5.4.0 | MIT | 视频渲染引擎 | 动态 import，控制层自建（ADR-001） |
+| lucide-react | ^1.17.0 | ISC | 图标 | 按需具名引入 |
+| clsx | ^2.1.1 | MIT | 类名拼接 | — |
+| tailwind-merge | ^3.6.0 | MIT | 类名去重 | — |
+| class-variance-authority | ^0.7.1 | Apache-2.0 | 变体样式（shadcn 基座） | 保留 NOTICE 义务 |
+| web-vitals | ^6.2.3 | Apache-2.0 | 性能指标采集 | 本地持久化，未上报 |
+
+> 许可证结论：39 个直接依赖均为 MIT / ISC / Apache-2.0 宽松许可，无 AGPL/GPL 传染风险；Apache-2.0 两项（class-variance-authority、web-vitals）在再分发时需保留许可证与 NOTICE 文件（当前未打包再分发，仅构建产物引用，义务不触发）。
+
+---
+
+## 2. 组件基座台账（components/ui）
+
+| 项目 | 数量 | 说明 |
+| ---- | ---- | ---- |
+| 保留组件 | 46 | shadcn/ui（new-york）+ Radix 原语，来源 MIT |
+| 业务实际引用 | 11 | button、dialog、input、label、separator、sheet、skeleton、textarea、toast、toggle、tooltip |
+| 2026-11-22 移除 | 9 | chart、carousel、drawer、input-otp、calendar、form、resizable、command、sonner（唯一用途是引入死依赖，且无任何业务引用） |
+| 恢复方式 | — | 需要时执行 `pnpm dlx shadcn@latest add <component>` 重新生成，并同步登记第 1 节 |
+
+---
+
+## 3. 死依赖移除记录（C-01 闭环）
+
+2026-11-22 移除 10 个仅被未引用 ui 文件使用的直接依赖，同步删除对应 9 个 ui 文件：
+
+| 依赖 | 版本 | 许可证 | 唯一引用点 | 处置 |
+| ---- | ---- | ---- | ---- | ---- |
+| recharts | 2.15.4 | MIT | ui/chart.tsx | 依赖 + 文件均删 |
+| embla-carousel-react | 8.6.0 | MIT | ui/carousel.tsx | 依赖 + 文件均删 |
+| vaul | 1.1.2 | MIT | ui/drawer.tsx | 依赖 + 文件均删 |
+| input-otp | 1.5.0 | MIT | ui/input-otp.tsx | 依赖 + 文件均删 |
+| react-day-picker | 9.14.0 | MIT | ui/calendar.tsx | 依赖 + 文件均删 |
+| react-hook-form | 7.92.0 | MIT | ui/form.tsx | 依赖 + 文件均删 |
+| react-resizable-panels | 2.1.9 | MIT | ui/resizable.tsx | 依赖 + 文件均删 |
+| cmdk | 1.1.1 | MIT | ui/command.tsx | 依赖 + 文件均删 |
+| sonner | 2.0.8 | MIT | ui/sonner.tsx | 依赖 + 文件均删 |
+| next-themes | 0.4.6 | MIT | ui/sonner.tsx | 依赖 + 文件均删（项目自有主题系统，无需此包） |
+
+**影响评估**：typecheck / lint / 193 单测 / 7 E2E / build 全绿；静态产物无变化；`pnpm install` 安装体积与供应链面下降。
+
+---
+
+## 4. 外部参考项目台账（仅参考，未复制源码）
+
+来源：[复用对照矩阵](./YYC3-项目规划-组件选型/YYC3-项目规划-开源组件库复用对照矩阵.md)。以下项目**未在执行代码或依赖中出现**，仅作 UX / API 设计参考：
+
+| 项目 | 许可证 | 本仓库使用方式 | 源码复制 | 结论 |
+| ---- | ---- | ---- | ---- | ---- |
+| Owncast | MIT | 直播播放器/聊天 UX 参考 | 否 | 唯一可有限移植候选（需先复核 THIRD-PARTY-LICENSES） |
+| Navidrome | GPL-3.0 | 音乐宿主服务 API 参考 | 否 | 仅独立服务 + API 组合可行，禁止复制源码 |
+| Mastodon | AGPL-3.0-or-later | 组件/拖拽 UX 参考 | 否 | 仅提炼规格 |
+| PeerTube | AGPL-3.0 | standalone player 设计参考 | 否 | 仅设计对照 |
+| jellyfin-web | GPL-2.0-or-later | 字幕/播放控制 UX 参考 | 否 | 仅设计对照 |
+| Jellyfin Server | GPL-2.0 | 宿主媒体库 API 概念 | 否 | API-only 候选 |
+| MediaCMS | AGPL-3.0 | 内容模型参考 | 否 | 仅设计对照 |
+| Misskey | AGPL-3.0（部分 MIT） | Deck/Widget UX 蓝本 | 否 | 仅产品交互参考 |
+| Nuclear | AGPL-3.0-only | 队列/插件接口模式参考 | 否 | 仅状态模型参考 |
+| Funkwhale | AGPL-3.0 | 联邦音乐协议参考 | 否 | 默认不引入 |
+
+**合规红线（持续有效）**：
+1. 禁止将 AGPL/GPL 源码复制进本 MIT 前端；确需复制须先完成法务与衍生作品认定。
+2. 独立进程部署 + 标准 API 调用属低风险组合，但仍需核验商标与数据处理合规。
+3. 软件许可证不覆盖字体、图标、音乐、视频、封面等第三方内容资产，须单独清点授权。
+
+---
+
+## 5. 本地 monorepo 包台账（组件供应库）
+
+来源：`yyc3-music-monorepo`（本地，未入库）。16 个 `@yyc3/music-*` 包 manifest 声明 MIT，但**根级/包级均未找到正式 LICENSE 文件**；三个 apps 与 m98-server 为 private 且未统一声明。
+
+| 处置要求 | 状态 |
+| ---- | ---- |
+| 补正式 LICENSE 与版权持有人 | 🟠 open（跨仓库复制前必须完成） |
+| 记录复制来源 commit | 🟠 open |
+| 保留第三方依赖许可证与 NOTICE | 🟠 open |
+| 单独确认歌曲/MV/艺人照片/字体授权 | 🟠 open |
+
+结论：在补齐上述四项前，**不得从本地 monorepo 复制代码进入本仓库**；当前仓库未复制任何该 monorepo 源码，合规状态为「未触发」。
+
+---
+
+## 6. 新增/升级组件准入清单
+
+引入任何第三方组件前逐项确认：
+
+1. 许可证为 MIT / Apache-2.0 / ISC / BSD 等宽松许可；若为 copyleft，默认否决。
+2. 上游仓库与固定版本（tag/commit）已记录；无 `.git` 的本地快照须重新拉取干净上游。
+3. 用途、引用点、包体影响已写入第 1 节。
+4. 不引入第二套同类基础设施（如第二个播放引擎、第二套状态库、第二套 UI 基座）。
+5. `pnpm security:check` 通过且无 high/critical 漏洞。
+6. 引入后 `typecheck + lint + test + build` 全绿。
+
+---
+
+## 7. 复核记录
+
+| 日期 | 动作 | 结果 |
+| ---- | ---- | ---- |
+| 2026-11-22 | 首版台账建立；39 个直接依赖许可证逐包实测；10 个死依赖移除 | 全部宽松许可；死依赖移除后全量门禁通过 |
+
+---
+
+## 变更历史
+
+| 版本 | 日期 | 变更 |
+| ---- | ---- | ---- |
+| v1.0.0 | 2026-11-22 | 首版：直接依赖 39 个许可证实测、组件基座 46 个台账、10 个死依赖移除记录、外部参考 10 项目合规边界、本地 monorepo 许可证缺口 |
+
+---
+
+**最后更新**: 2026-11-22
+**维护者**: YYC³ Team
+**版本**: v1.0.0
+
+---
+
+<p align="center">
+  <b>YYC³</b>（YanYuCloudCube™ · 注册商标）<br>
+  言启象限 | 语枢未来<br>
+  <i>Words Initiate Quadrants, Language Serves as Core for Future</i><br>
+  万象归元于云枢 | 深栈智启新纪元<br>
+  <i>All things converge in cloud pivot; Deep stacks ignite a new era of intelligence</i><br>
+  <sub>© 2026 YanYuCloudCube™（YYC³）· <a href="mailto:admin@0379.email">admin@0379.email</a></sub>
+</p>
