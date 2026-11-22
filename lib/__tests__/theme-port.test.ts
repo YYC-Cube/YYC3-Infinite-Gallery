@@ -5,10 +5,11 @@
  * @version 1.0.0
  * @created 2026-11-22
  */
-import { DEFAULT_CONFIG, type GalleryConfig } from "../config-store";
+import { DEFAULT_CONFIG, normalizeConfig, type GalleryConfig } from "../config-store";
 import type { ThemePortPayload } from "../theme-port";
 import {
   applyThemePreset,
+  auditThemeContrast,
   blendOver,
   buildThemePayload,
   contrastRatio,
@@ -305,6 +306,75 @@ describe("主题方案库", () => {
     expect(result.config.warmPrimaryColor).toBe(
       DEFAULT_CONFIG.warmPrimaryColor,
     );
+  });
+});
+
+describe("批量对比度审计", () => {
+  test("应逐项计算并对缺失/非法令牌跳过", () => {
+    const report = auditThemeContrast({
+      "--background": "#000000",
+      "--foreground": "#ffffff",
+      "--text-primary": "#dddddd",
+      "--text-secondary": "rgba(255, 255, 255, 0.02)",
+      "--text-muted": "not-a-color",
+      "--warm-primary": "#d4a574",
+    });
+    // --text-muted 非法被跳过，其余 4 项保留
+    expect(report.total).toBe(4);
+    expect(report.rows.map((row) => row.token)).not.toContain("--text-muted");
+    expect(report.rows.find((row) => row.token === "--foreground")?.level).toBe(
+      "AAA",
+    );
+    // 近黑前景在纯黑背景上接近 1:1
+    const secondary = report.rows.find(
+      (row) => row.token === "--text-secondary",
+    );
+    expect(secondary?.passesAA).toBe(false);
+    expect(report.fail).toBeGreaterThanOrEqual(1);
+    expect(report.worst?.token).toBe("--text-secondary");
+  });
+
+  test("全部达标时应无 warn/fail", () => {
+    const report = auditThemeContrast({
+      "--background": "#ffffff",
+      "--foreground": "#000000",
+      "--text-primary": "#111111",
+      "--text-secondary": "#333333",
+      "--text-muted": "#555555",
+      "--warm-primary": "#222222",
+      "--warm-secondary": "#2a2a2a",
+      "--warm-accent": "#1a1a1a",
+    });
+    expect(report.total).toBe(7);
+    expect(report.pass).toBe(7);
+    expect(report.warn).toBe(0);
+    expect(report.fail).toBe(0);
+    expect(report.worst).not.toBeNull();
+  });
+
+  test("缺少背景时所有项跳过且不抛错", () => {
+    const report = auditThemeContrast({ "--foreground": "#ffffff" });
+    expect(report.total).toBe(0);
+    expect(report.worst).toBeNull();
+    expect(report.pass).toBe(0);
+  });
+});
+
+describe("Logo 配置归一化", () => {
+  test("默认配置应包含 Logo 字段且未启用", () => {
+    expect(DEFAULT_CONFIG.logoAssetId).toBeNull();
+    expect(DEFAULT_CONFIG.logoImage).toBeNull();
+    expect(DEFAULT_CONFIG.logoSize).toBe(48);
+    expect(DEFAULT_CONFIG.logoOpacity).toBe(1);
+    expect(DEFAULT_CONFIG.logoRadius).toBe(0);
+  });
+
+  test("旧配置缺少 Logo 字段时应补齐默认值", () => {
+    const legacy = { brandLine1: "旧版标语" } as Partial<GalleryConfig>;
+    const normalized = normalizeConfig(legacy);
+    expect(normalized.brandLine1).toBe("旧版标语");
+    expect(normalized.logoAssetId).toBeNull();
+    expect(normalized.logoSize).toBe(48);
   });
 });
 

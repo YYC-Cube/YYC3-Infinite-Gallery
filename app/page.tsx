@@ -77,7 +77,8 @@ export default function Home() {
     void hydrateBackgrounds(savedConfig).then((hydrated) => {
       if (
         hydrated.backgroundImage !== savedConfig.backgroundImage ||
-        hydrated.playerBackgroundImage !== savedConfig.playerBackgroundImage
+        hydrated.playerBackgroundImage !== savedConfig.playerBackgroundImage ||
+        hydrated.logoImage !== savedConfig.logoImage
       ) {
         setConfig(hydrated);
       }
@@ -258,6 +259,22 @@ export default function Home() {
 
         {/* 主标语区域 - 完全可配置 */}
         <div className="relative px-4 pt-4 sm:pt-6">
+          {config.logoImage && (
+            <div className="mb-3 flex justify-center">
+              <img
+                src={config.logoImage}
+                alt={config.brandLine1.trim() || "YYC³ 品牌标识"}
+                draggable={false}
+                className="w-auto select-none object-contain"
+                style={{
+                  height: config.logoSize,
+                  opacity: config.logoOpacity,
+                  borderRadius: config.logoRadius,
+                  filter: "drop-shadow(0 3px 12px rgba(0, 0, 0, 0.35))",
+                }}
+              />
+            </div>
+          )}
           <p
             className="
 							font-[family-name:var(--font-cormorant)]

@@ -490,3 +490,83 @@ export function evaluateContrast(
     ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : ratio >= 3 ? "AA-Large" : "Fail";
   return { ratio, level, passesAA: ratio >= 4.5 };
 }
+
+/* ========================================
+   批量对比度审计
+   ======================================== */
+
+export interface ContrastAuditRow {
+  /** 主题令牌键名（如 --warm-primary） */
+  token: string;
+  label: string;
+  foreground: string;
+  background: string;
+  ratio: number;
+  level: WcagLevel;
+  passesAA: boolean;
+}
+
+export interface ContrastAuditReport {
+  rows: ContrastAuditRow[];
+  total: number;
+  /** 达到正文 AA（≥4.5:1） */
+  pass: number;
+  /** 仅大文本达标（3:1–4.5:1） */
+  warn: number;
+  /** 未达标（<3:1） */
+  fail: number;
+  /** 对比度最低的一项 */
+  worst: ContrastAuditRow | null;
+}
+
+/** 审计目标：主题内的前景令牌与其对照背景 */
+const AUDIT_TARGETS: { token: string; label: string }[] = [
+  { token: "--foreground", label: "正文" },
+  { token: "--text-primary", label: "主要文字" },
+  { token: "--text-secondary", label: "次要文字" },
+  { token: "--text-muted", label: "弱化文字" },
+  { token: "--warm-primary", label: "主色调" },
+  { token: "--warm-secondary", label: "次色调" },
+  { token: "--warm-accent", label: "强调色" },
+];
+
+/**
+ * 批量审计主题配色：以 --background 为统一背景，逐项计算 WCAG 等级。
+ * 缺失或非法的令牌自动跳过，不阻断其余项。
+ */
+export function auditThemeContrast(
+  colors: Record<string, string>,
+): ContrastAuditReport {
+  const background = colors["--background"] ?? "";
+  const rows: ContrastAuditRow[] = [];
+
+  for (const target of AUDIT_TARGETS) {
+    const foreground = colors[target.token];
+    if (!foreground) continue;
+    const verdict = evaluateContrast(foreground, background);
+    if (!verdict) continue;
+    rows.push({
+      token: target.token,
+      label: target.label,
+      foreground,
+      background,
+      ratio: verdict.ratio,
+      level: verdict.level,
+      passesAA: verdict.passesAA,
+    });
+  }
+
+  const worst = rows.reduce<ContrastAuditRow | null>(
+    (acc, row) => (!acc || row.ratio < acc.ratio ? row : acc),
+    null,
+  );
+
+  return {
+    rows,
+    total: rows.length,
+    pass: rows.filter((row) => row.passesAA).length,
+    warn: rows.filter((row) => row.level === "AA-Large").length,
+    fail: rows.filter((row) => row.level === "Fail").length,
+    worst,
+  };
+}

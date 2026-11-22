@@ -1,10 +1,10 @@
 /**
- * @file 背景资源仓库
- * @description 使用 IndexedDB 保存上传背景，配置仅持久化 assetId
+ * @file 背景与品牌资源仓库
+ * @description 使用 IndexedDB 保存上传资源（背景图 / 品牌 Logo），配置仅持久化 assetId
  * @author YYC³
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2026-11-19
- * @updated 2026-11-19
+ * @updated 2026-11-23
  */
 
 const DB_NAME = "yyc3-gallery-assets";
@@ -55,8 +55,8 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-export async function storeBackgroundAsset(file: File): Promise<string | null> {
-  const id = `bg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+async function storeAsset(file: File, prefix: "bg" | "logo"): Promise<string | null> {
+  const id = `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   try {
     const db = await openDatabase();
     await new Promise<void>((resolve, reject) => {
@@ -80,6 +80,15 @@ export async function storeBackgroundAsset(file: File): Promise<string | null> {
       return null;
     }
   }
+}
+
+export async function storeBackgroundAsset(file: File): Promise<string | null> {
+  return storeAsset(file, "bg");
+}
+
+/** 品牌 Logo 与背景共用同一资源仓库，仅 ID 前缀区分 */
+export async function storeLogoAsset(file: File): Promise<string | null> {
+  return storeAsset(file, "logo");
 }
 
 export async function loadBackgroundAsset(id: string): Promise<Blob | null> {

@@ -14,7 +14,11 @@ import {
   Upload,
 } from "lucide-react";
 import WidgetSettings from "@/components/widgets/WidgetSettings";
-import { removeBackgroundAsset, storeBackgroundAsset } from "@/lib/asset-store";
+import {
+  removeBackgroundAsset,
+  storeBackgroundAsset,
+  storeLogoAsset,
+} from "@/lib/asset-store";
 import type { GalleryConfig } from "@/lib/config-store";
 import { saveConfig, applyConfigToDOM } from "@/lib/config-store";
 import {
@@ -31,6 +35,7 @@ import {
 } from "@/lib/version-store";
 import {
   applyThemePreset,
+  auditThemeContrast,
   buildThemePayload,
   downloadThemePayload,
   evaluateContrast,
@@ -39,6 +44,7 @@ import {
   parseThemeImport,
   removeThemePreset,
   saveThemePreset,
+  type ContrastAuditReport,
   type ThemePreset,
 } from "@/lib/theme-port";
 import { LOCALES, setLocale, t, useLocale } from "@/lib/i18n";
@@ -79,6 +85,7 @@ export default function ConfigPanel({
 }: ConfigPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const playerFileInputRef = useRef<HTMLInputElement>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
   const themeImportInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const onToggleRef = useRef(onToggle);
@@ -89,6 +96,7 @@ export default function ConfigPanel({
     listThemePresets(),
   );
   const [presetName, setPresetName] = useState("");
+  const [audit, setAudit] = useState<ContrastAuditReport | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const version = useVersion();
   const locale = useLocale();
@@ -289,6 +297,55 @@ export default function ConfigPanel({
     },
     [readImage],
   );
+
+  const handleLogoUpload = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      if (!/^image\/(png|jpeg|svg\+xml|webp)$/.test(file.type)) {
+        setUploadError("Logo 支持 PNG、SVG、JPG 或 WebP");
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        setUploadError("Logo 不能超过 2MB");
+        return;
+      }
+      setUploadError("");
+      const preview = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      }).catch(() => "");
+      if (!preview) {
+        setUploadError("Logo 读取失败，请重试");
+        return;
+      }
+
+      const previousId = config.logoAssetId;
+      const assetId = await storeLogoAsset(file);
+      if (!assetId) {
+        setUploadError("Logo 保存失败，请换一张更小的图片");
+        return;
+      }
+      updateConfig({ logoAssetId: assetId, logoImage: preview });
+      if (previousId && previousId !== assetId) {
+        void removeBackgroundAsset(previousId);
+      }
+    },
+    [config.logoAssetId, updateConfig],
+  );
+
+  const runContrastAudit = () => {
+    setAudit(
+      auditThemeContrast({
+        ...themeDefinition.colors,
+        // 审计实际生效的主色（含用户覆盖）
+        "--warm-primary": displayWarmPrimary,
+      }),
+    );
+  };
 
   const showPortMessage = useCallback((message: string, tone: "ok" | "error") => {
     setPortMessage(message);
@@ -668,6 +725,74 @@ export default function ConfigPanel({
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+
+            {/* 批量对比度审计 */}
+            <div className="mt-2 rounded-xl border border-warm/15 bg-black/20 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] text-white/60">对比度批量审计</span>
+                <button
+                  type="button"
+                  onClick={runContrastAudit}
+                  className="rounded-full border border-warm/30 px-2.5 py-0.5 text-[9px] text-warm-primary transition-colors hover:bg-warm/10"
+                >
+                  运行审计
+                </button>
+              </div>
+              {!audit ? (
+                <p className="text-[9px] text-white/25">
+                  按 WCAG 2.x 检查主题主要文字与配色对背景的对比度。
+                </p>
+              ) : (
+                <>
+                  <p className="mb-2 text-[9px] font-mono">
+                    <span className="text-emerald-300/80">达标 {audit.pass}</span>
+                    <span className="text-white/25"> · </span>
+                    <span className="text-amber-300/80">仅大字 {audit.warn}</span>
+                    <span className="text-white/25"> · </span>
+                    <span className="text-red-300/80">未达标 {audit.fail}</span>
+                    <span className="text-white/25">
+                      {" "}
+                      / 共 {audit.total} 项
+                    </span>
+                  </p>
+                  <ul className="space-y-0.5">
+                    {audit.rows.map((row) => {
+                      const tone = row.passesAA
+                        ? "text-emerald-300/80"
+                        : row.level === "AA-Large"
+                          ? "text-amber-300/80"
+                          : "text-red-300/80";
+                      return (
+                        <li
+                          key={row.token}
+                          className="flex items-center gap-2 text-[9px]"
+                        >
+                          <span className="w-14 shrink-0 text-white/45">
+                            {row.label}
+                          </span>
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-sm border border-white/15"
+                            style={{ background: row.foreground }}
+                            aria-hidden
+                          />
+                          <span className="flex-1 font-mono text-white/25">
+                            {row.token}
+                          </span>
+                          <span className={`font-mono tabular-nums ${tone}`}>
+                            {row.ratio.toFixed(2)}:1 · {row.level}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {audit.fail > 0 && (
+                    <p className="mt-2 text-[9px] text-white/30">
+                      建议提高未达标项亮度或加深背景，正文目标 ≥4.5:1。
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
@@ -1075,6 +1200,89 @@ export default function ConfigPanel({
             >
               Typography
             </h3>
+
+            {/* 品牌 Logo 上传 */}
+            <div className="mb-4 rounded-xl border border-warm/15 bg-black/20 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] text-white/60">品牌 Logo</span>
+                <span className="text-[9px] text-white/25">
+                  PNG / SVG / JPG · ≤2MB
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => logoFileInputRef.current?.click()}
+                aria-label="上传品牌 Logo"
+                className="flex w-full items-center gap-3 rounded-lg border border-dashed border-warm/25 px-3 py-2.5 text-left transition-colors hover:border-warm/45 hover:bg-warm/5"
+              >
+                {config.logoImage ? (
+                  <img
+                    src={config.logoImage}
+                    alt="Logo 预览"
+                    className="h-10 w-auto max-w-24 shrink-0 rounded object-contain"
+                  />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warm/10 text-warm-primary/70">
+                    <ImageIcon size={14} />
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block text-[11px] text-white/60">
+                    {config.logoImage ? "点击更换 Logo" : "点击上传 Logo"}
+                  </span>
+                  <span className="block text-[9px] text-white/25">
+                    显示在页脚标语上方，支持透明背景
+                  </span>
+                </span>
+              </button>
+              <input
+                ref={logoFileInputRef}
+                type="file"
+                accept="image/png,image/svg+xml,image/jpeg,image/webp"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
+              {config.logoImage && (
+                <div className="mt-3 space-y-3 pl-3 border-l-2 border-warm/20">
+                  <SliderControl
+                    label="Logo 高度"
+                    value={config.logoSize}
+                    min={24}
+                    max={120}
+                    step={4}
+                    unit="px"
+                    onChange={(v) => updateConfig({ logoSize: v })}
+                  />
+                  <SliderControl
+                    label="Logo 不透明度"
+                    value={config.logoOpacity}
+                    min={0.2}
+                    max={1}
+                    step={0.05}
+                    onChange={(v) => updateConfig({ logoOpacity: v })}
+                  />
+                  <SliderControl
+                    label="Logo 圆角"
+                    value={config.logoRadius}
+                    min={0}
+                    max={32}
+                    step={2}
+                    unit="px"
+                    onChange={(v) => updateConfig({ logoRadius: v })}
+                  />
+                  <button
+                    onClick={() => {
+                      const assetId = config.logoAssetId;
+                      updateConfig({ logoAssetId: null, logoImage: null });
+                      if (assetId) void removeBackgroundAsset(assetId);
+                    }}
+                    className="text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                  >
+                    移除 Logo
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div className="mb-4 space-y-3 rounded-xl border border-warm/15 bg-black/20 p-3">
               <p className="text-[10px] font-mono tracking-widest text-white/45">

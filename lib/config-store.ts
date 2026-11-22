@@ -55,6 +55,16 @@ export interface GalleryConfig {
   brandLine1: string;
   brandLine2: string;
 
+  /* 品牌 Logo（assetId 存 IndexedDB，logoImage 仅运行时预览） */
+  logoAssetId: string | null;
+  logoImage: string | null;
+  /** 显示高度（px） */
+  logoSize: number;
+  /** 不透明度 0–1 */
+  logoOpacity: number;
+  /** 圆角（px） */
+  logoRadius: number;
+
   /* 排版设置 */
   fontSize: string;
   fontWeight: string;
@@ -108,6 +118,12 @@ export const DEFAULT_CONFIG: GalleryConfig = {
 
   brandLine1: "",
   brandLine2: "",
+
+  logoAssetId: null,
+  logoImage: null,
+  logoSize: 48,
+  logoOpacity: 1,
+  logoRadius: 0,
 
   fontSize: "base",
   fontWeight: "light",
@@ -187,6 +203,8 @@ export function saveConfig(config: GalleryConfig): void {
       playerBackgroundImage: config.playerBackgroundAssetId
         ? null
         : config.playerBackgroundImage,
+      // Logo 同背景策略：有 assetId 时只存引用，避免 DataURL 占用配额
+      logoImage: config.logoAssetId ? null : config.logoImage,
     };
     localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(persisted));
     void hostStorageSet(CONFIG_STORAGE_KEY, persisted);
@@ -233,7 +251,18 @@ export async function hydratePlayerBackground(
   };
 }
 
-/** 同时恢复页面背景与媒体空间背景（两者均以 IndexedDB 为真实来源） */
+/** 恢复品牌 Logo 预览地址（IndexedDB 为真实来源） */
+export async function hydrateLogo(config: GalleryConfig): Promise<GalleryConfig> {
+  if (config.logoImage || !config.logoAssetId) return config;
+  const blob = await loadBackgroundAsset(config.logoAssetId);
+  if (!blob) return config;
+  return {
+    ...config,
+    logoImage: createHydratedUrl(blob),
+  };
+}
+
+/** 同时恢复页面背景、媒体空间背景与品牌 Logo（三者均以 IndexedDB 为真实来源） */
 export async function hydrateBackgrounds(
   config: GalleryConfig,
 ): Promise<GalleryConfig> {
@@ -244,7 +273,8 @@ export async function hydrateBackgrounds(
       next = { ...next, backgroundImage: createHydratedUrl(blob) };
     }
   }
-  return hydratePlayerBackground(next);
+  next = await hydratePlayerBackground(next);
+  return hydrateLogo(next);
 }
 
 export function resetConfig(): GalleryConfig {
