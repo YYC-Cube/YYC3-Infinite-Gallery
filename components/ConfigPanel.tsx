@@ -30,10 +30,16 @@ import {
   type LayoutVersion,
 } from "@/lib/version-store";
 import {
+  applyThemePreset,
   buildThemePayload,
   downloadThemePayload,
   evaluateContrast,
+  listThemePresets,
+  MAX_PRESETS,
   parseThemeImport,
+  removeThemePreset,
+  saveThemePreset,
+  type ThemePreset,
 } from "@/lib/theme-port";
 import { LOCALES, setLocale, t, useLocale } from "@/lib/i18n";
 
@@ -79,6 +85,10 @@ export default function ConfigPanel({
   const [uploadError, setUploadError] = useState("");
   const [portMessage, setPortMessage] = useState("");
   const [portTone, setPortTone] = useState<"ok" | "error">("ok");
+  const [presets, setPresets] = useState<ThemePreset[]>(() =>
+    listThemePresets(),
+  );
+  const [presetName, setPresetName] = useState("");
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const version = useVersion();
   const locale = useLocale();
@@ -306,6 +316,24 @@ export default function ConfigPanel({
     }
   }, [config, showPortMessage, version.theme]);
 
+  const applyImported = useCallback(
+    (result: ReturnType<typeof parseThemeImport>, sourceLabel: string) => {
+      if (!result.ok) {
+        showPortMessage(`导入失败：${result.error}`, "error");
+        return;
+      }
+      if (result.themeId) setTheme(result.themeId);
+      updateConfig(result.config);
+      showPortMessage(
+        `${sourceLabel}「${result.name}」${
+          result.skipped > 0 ? `（${result.skipped} 个非法颜色字段已跳过）` : ""
+        }`,
+        "ok",
+      );
+    },
+    [showPortMessage, updateConfig],
+  );
+
   const handleImportTheme = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -316,22 +344,39 @@ export default function ConfigPanel({
         return;
       }
       void file.text().then((text) => {
-        const result = parseThemeImport(text);
-        if (!result.ok) {
-          showPortMessage(`导入失败：${result.error}`, "error");
-          return;
-        }
-        if (result.themeId) setTheme(result.themeId);
-        updateConfig(result.config);
-        showPortMessage(
-          `已应用「${result.name}」${
-            result.skipped > 0 ? `（${result.skipped} 个非法颜色字段已跳过）` : ""
-          }`,
-          "ok",
-        );
+        applyImported(parseThemeImport(text), "已应用");
       });
     },
-    [showPortMessage, updateConfig],
+    [applyImported, showPortMessage],
+  );
+
+  const handleSavePreset = useCallback(() => {
+    const result = saveThemePreset(
+      buildThemePayload(config, version.theme),
+      presetName,
+    );
+    if (!result.ok) {
+      showPortMessage(result.error, "error");
+      return;
+    }
+    setPresets(result.presets);
+    setPresetName("");
+    showPortMessage("当前主题已保存为方案快照", "ok");
+  }, [config, presetName, showPortMessage, version.theme]);
+
+  const handleApplyPreset = useCallback(
+    (preset: ThemePreset) => {
+      applyImported(applyThemePreset(preset), "已恢复方案");
+    },
+    [applyImported],
+  );
+
+  const handleRemovePreset = useCallback(
+    (preset: ThemePreset) => {
+      setPresets(removeThemePreset(preset.id));
+      showPortMessage(`已删除方案「${preset.name}」`, "ok");
+    },
+    [showPortMessage],
   );
 
   if (!isOpen) return null;
@@ -558,6 +603,72 @@ export default function ConfigPanel({
               <p className="mt-1.5 text-[9px] leading-relaxed text-white/25">
                 导出包含配色、光效、排版与动效参数；导入值将作为显式覆盖应用，不影响背景图片。
               </p>
+            </div>
+
+            {/* 主题方案库：本地快照与一键回滚 */}
+            <div className="mt-2 rounded-xl border border-warm/15 bg-black/20 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] text-white/60">主题方案库</span>
+                <span className="text-[9px] font-mono text-white/25">
+                  {presets.length}/{MAX_PRESETS}
+                </span>
+              </div>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={(event) => setPresetName(event.target.value)}
+                  maxLength={60}
+                  placeholder="方案名称（留空用主题名）"
+                  aria-label="主题方案名称"
+                  className="min-w-0 flex-1 rounded-lg border border-warm/20 bg-black/25 px-2.5 py-1.5 text-[10px] text-white/70 outline-none transition-colors placeholder:text-white/20 focus:border-warm/50"
+                />
+                <button
+                  type="button"
+                  onClick={handleSavePreset}
+                  className="shrink-0 rounded-lg border border-warm/25 bg-warm/10 px-2.5 py-1.5 text-[10px] text-warm-primary transition-colors hover:bg-warm/20"
+                  title="将当前主题保存为方案快照"
+                >
+                  保存
+                </button>
+              </div>
+              {presets.length === 0 ? (
+                <p className="mt-2 text-[9px] text-white/25">
+                  暂无快照。保存后可一键回滚到任意方案。
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1">
+                  {presets.map((preset) => (
+                    <li
+                      key={preset.id}
+                      className="flex items-center gap-1 rounded-lg border border-warm/10 bg-black/20 px-2 py-1"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[10px] text-white/60">
+                        {preset.name}
+                      </span>
+                      <span className="shrink-0 text-[8px] font-mono text-white/20">
+                        {preset.savedAt.slice(5, 16).replace("T", " ")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyPreset(preset)}
+                        aria-label={`应用方案 ${preset.name}`}
+                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] text-warm-primary transition-colors hover:bg-warm/15"
+                      >
+                        应用
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePreset(preset)}
+                        aria-label={`删除方案 ${preset.name}`}
+                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] text-white/30 transition-colors hover:text-red-300"
+                      >
+                        删除
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="mt-5">

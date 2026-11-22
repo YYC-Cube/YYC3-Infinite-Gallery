@@ -286,6 +286,102 @@ export function downloadThemePayload(payload: ThemePortPayload): boolean {
 }
 
 /* ========================================
+   主题方案库（本地快照与回滚）
+   ======================================== */
+
+export const PRESET_STORAGE_KEY = "yyc3-theme-presets-v1";
+export const MAX_PRESETS = 10;
+
+export interface ThemePreset {
+  id: string;
+  name: string;
+  savedAt: string;
+  payload: ThemePortPayload;
+}
+
+function isPayloadShape(value: unknown): value is ThemePortPayload {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return item.format === "yyc3-theme" && item.version === 1;
+}
+
+/** 解析方案库原始字符串，逐条校验并丢弃损坏条目 */
+export function parsePresetList(raw: string | null): ThemePreset[] {
+  if (!raw) return [];
+  try {
+    const data = JSON.parse(raw) as unknown;
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter((entry): entry is ThemePreset => {
+        if (!entry || typeof entry !== "object") return false;
+        const item = entry as Partial<ThemePreset>;
+        return (
+          typeof item.id === "string" &&
+          typeof item.name === "string" &&
+          isPayloadShape(item.payload)
+        );
+      })
+      .slice(0, MAX_PRESETS);
+  } catch {
+    return [];
+  }
+}
+
+function writePresets(presets: ThemePreset[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets));
+  } catch {
+    /* 存储不可用时仅保留内存态 */
+  }
+}
+
+export function listThemePresets(): ThemePreset[] {
+  if (typeof window === "undefined") return [];
+  return parsePresetList(window.localStorage.getItem(PRESET_STORAGE_KEY));
+}
+
+export type PresetSaveResult =
+  | { ok: true; presets: ThemePreset[]; id: string }
+  | { ok: false; error: string };
+
+/** 保存当前主题为命名快照；同名覆盖、超出上限拒绝 */
+export function saveThemePreset(
+  payload: ThemePortPayload,
+  name?: string,
+): PresetSaveResult {
+  const label = name?.trim() || payload.name;
+  if (!label) return { ok: false, error: "请填写方案名称" };
+  const presets = listThemePresets();
+  const existing = presets.find((item) => item.name === label);
+  if (!existing && presets.length >= MAX_PRESETS) {
+    return { ok: false, error: `最多保存 ${MAX_PRESETS} 个方案，请先删除旧方案` };
+  }
+  const preset: ThemePreset = {
+    id: existing?.id ?? `preset-${Date.now().toString(36)}`,
+    name: label.slice(0, 60),
+    savedAt: new Date().toISOString(),
+    payload: { ...payload, name: label.slice(0, 60) },
+  };
+  const next = existing
+    ? presets.map((item) => (item.id === existing.id ? preset : item))
+    : [preset, ...presets];
+  writePresets(next);
+  return { ok: true, presets: next, id: preset.id };
+}
+
+export function removeThemePreset(id: string): ThemePreset[] {
+  const next = listThemePresets().filter((item) => item.id !== id);
+  writePresets(next);
+  return next;
+}
+
+/** 应用方案快照：复用导入校验与覆盖语义 */
+export function applyThemePreset(preset: ThemePreset): ThemeImportResult {
+  return parseThemeImport(JSON.stringify(preset.payload));
+}
+
+/* ========================================
    WCAG 对比度评估（纯函数）
    ======================================== */
 

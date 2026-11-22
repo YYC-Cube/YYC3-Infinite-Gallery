@@ -8,14 +8,21 @@
 import { DEFAULT_CONFIG, type GalleryConfig } from "../config-store";
 import type { ThemePortPayload } from "../theme-port";
 import {
+  applyThemePreset,
   blendOver,
   buildThemePayload,
   contrastRatio,
   downloadThemePayload,
   evaluateContrast,
+  listThemePresets,
+  MAX_PRESETS,
   parseColorToRgb,
+  parsePresetList,
   parseThemeImport,
+  PRESET_STORAGE_KEY,
   relativeLuminance,
+  removeThemePreset,
+  saveThemePreset,
   THEME_PORT_MAX_BYTES,
 } from "../theme-port";
 
@@ -212,6 +219,92 @@ describe("downloadThemePayload", () => {
     removeSpy.mockRestore();
     revokeSpy.mockRestore();
     createSpy.mockRestore();
+  });
+});
+
+describe("主题方案库", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  test("空库与损坏数据应返回空数组", () => {
+    expect(listThemePresets()).toEqual([]);
+    expect(parsePresetList(null)).toEqual([]);
+    expect(parsePresetList("not json")).toEqual([]);
+    expect(parsePresetList('{"a":1}')).toEqual([]);
+    expect(
+      parsePresetList('[{"id":"x","name":"n","payload":{"format":"other"}}]'),
+    ).toEqual([]);
+  });
+
+  test("保存后应可列出，同名保存覆盖而非新增", () => {
+    const payload = buildThemePayload(DEFAULT_CONFIG, "warm-art");
+    const first = saveThemePreset(payload, "夜间工程");
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.presets).toHaveLength(1);
+
+    const second = saveThemePreset(
+      buildThemePayload(DEFAULT_CONFIG, "deep-night"),
+      "夜间工程",
+    );
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.presets).toHaveLength(1);
+    expect(second.id).toBe(first.id);
+    expect(second.presets[0]?.payload.theme).toBe("deep-night");
+  });
+
+  test("超过上限应拒绝且不写入", () => {
+    for (let index = 0; index < MAX_PRESETS; index += 1) {
+      const result = saveThemePreset(
+        buildThemePayload(DEFAULT_CONFIG, "warm-art"),
+        `方案-${index}`,
+      );
+      expect(result.ok).toBe(true);
+    }
+    const overflow = saveThemePreset(
+      buildThemePayload(DEFAULT_CONFIG, "warm-art"),
+      "超出方案",
+    );
+    expect(overflow.ok).toBe(false);
+    if (!overflow.ok) expect(overflow.error).toContain(String(MAX_PRESETS));
+    expect(listThemePresets()).toHaveLength(MAX_PRESETS);
+  });
+
+  test("名称为空时应拒绝", () => {
+    const payload = { ...buildThemePayload(DEFAULT_CONFIG, "warm-art"), name: "" };
+    const result = saveThemePreset(payload, "   ");
+    expect(result.ok).toBe(false);
+  });
+
+  test("删除后应持久化移除", () => {
+    const saved = saveThemePreset(
+      buildThemePayload(DEFAULT_CONFIG, "aurora"),
+      "极光",
+    );
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const rest = removeThemePreset(saved.id);
+    expect(rest).toHaveLength(0);
+    expect(listThemePresets()).toHaveLength(0);
+    expect(window.localStorage.getItem(PRESET_STORAGE_KEY)).toBe("[]");
+  });
+
+  test("应用方案应复用导入语义并标记覆盖", () => {
+    const payload = buildThemePayload(DEFAULT_CONFIG, "cyberpunk");
+    const saved = saveThemePreset(payload, "赛博");
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const preset = listThemePresets()[0]!;
+    const result = applyThemePreset(preset);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.themeId).toBe("cyberpunk");
+    expect(result.config.visualOverrides?.warmPrimary).toBe(true);
+    expect(result.config.warmPrimaryColor).toBe(
+      DEFAULT_CONFIG.warmPrimaryColor,
+    );
   });
 });
 

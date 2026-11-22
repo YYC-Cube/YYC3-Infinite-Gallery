@@ -167,9 +167,15 @@ function restoreFromStorage(): MediaSpaceState {
       const seed = saved.kind === "audio" ? AUDIO_TRACKS[0] : VIDEO_TRACKS[0];
       const savedQueue =
         Array.isArray(saved.queue) && isTrackArray(saved.queue)
-          ? saved.queue.filter(
-              (track) => !track.isLocal && track.kind === saved.kind,
-            )
+          ? saved.queue
+              .filter((track) => !track.isLocal && track.kind === saved.kind)
+              // 内置曲目按 id 取最新地址：媒体基址（CDN）变更后旧持久化路径自动失效
+              .map((track) => {
+                const fresh = BUILTIN_TRACKS.find((item) => item.id === track.id);
+                return fresh
+                  ? { ...track, src: fresh.src, cover: fresh.cover }
+                  : track;
+              })
           : [];
       const queue =
         savedQueue.length > 0

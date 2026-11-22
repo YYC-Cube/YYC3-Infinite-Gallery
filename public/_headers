@@ -1,0 +1,27 @@
+# YYC³ 安全响应头（仅 Cloudflare Pages / Netlify / 其他支持 _headers 的平台生效）
+# GitHub Pages 会忽略本文件；如需在 Pages 上生效，请将域名接入边缘层并复用同一套响应头。
+#
+# 说明：
+# - Next.js 静态导出含内联脚本与内联样式，script-src/style-src 必须保留 'unsafe-inline'
+# - 媒体既有同源资源也有 blob:（本地上传）与可配置 CDN（NEXT_PUBLIC_MEDIA_BASE_URL）
+# - 如启用独立 CDN 域名，把 media-src / img-src 中的 https: 收紧为该域名
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# 静态资源长缓存（带内容哈希的构建产物）
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Service Worker 不缓存，确保更新及时生效
+/sw.js
+  Cache-Control: no-cache
+
+# HTML 不缓存，避免旧版本壳
+/*.html
+  Cache-Control: no-cache

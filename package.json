@@ -42,6 +42,7 @@
     "test:coverage": "jest --coverage --passWithNoTests",
     "docs:check": "node scripts/check-docs.mjs",
     "assets:check": "node scripts/check-assets-budget.mjs",
+    "assets:plan": "node scripts/migrate-media-to-cdn.mjs",
     "security:check": "node scripts/check-security.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",

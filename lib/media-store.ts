@@ -2,10 +2,12 @@
  * @file 媒体资源与播放器状态管理
  * @description 统一管理画廊图源、内置音视频曲目、悬浮播放器布局的本地持久化
  * @author YYC³
- * @version 1.0.0
+ * @version 1.1.0
  * @created 2026-11-18
- * @updated 2026-11-18
+ * @updated 2026-11-22
  */
+
+import { mediaUrl } from "@/lib/media-url";
 
 export type MediaKind = "audio" | "video";
 export type RepeatMode = "off" | "all" | "one";
@@ -65,10 +67,10 @@ const LANDSCAPE_YEARS = [
 
 export const PORTRAIT_IMAGES: string[] = Array.from(
   { length: 10 },
-  (_, index) => `/artist-3x4/${index}.webp`,
+  (_, index) => mediaUrl(`/artist-3x4/${index}.webp`),
 );
 export const LANDSCAPE_IMAGES: string[] = LANDSCAPE_YEARS.map(
-  (year) => `/artist-4x3/Music-${year}.jpg`,
+  (year) => mediaUrl(`/artist-4x3/Music-${year}.jpg`),
 );
 /** 画廊完整图源：3:4 + 4:3 */
 export const GALLERY_IMAGES: string[] = [
@@ -124,8 +126,8 @@ export const BUILTIN_TRACKS: MediaTrack[] = [
     title: name.replace(/\.mp3$/i, ""),
     artist: "董小姐",
     album: "YYC³ 音乐典藏",
-    cover: coverAt(index),
-    src: `/mp3/${encodeURIComponent(name)}`,
+    cover: mediaUrl(coverAt(index)),
+    src: mediaUrl(`/mp3/${encodeURIComponent(name)}`),
     kind: "audio" as const,
   })),
   ...VIDEO_FILES.map((video, index) => ({
@@ -133,8 +135,8 @@ export const BUILTIN_TRACKS: MediaTrack[] = [
     title: `Music ${video.year}`,
     artist: "YYC³ 影像",
     album: video.dir === "mv-3x4" ? "影像典藏 · 3:4" : "影像典藏 · 4:3",
-    cover: video.cover,
-    src: `/${video.dir}/Music-${video.year}.mp4`,
+    cover: mediaUrl(video.cover),
+    src: mediaUrl(`/${video.dir}/Music-${video.year}.mp4`),
     kind: "video" as const,
   })),
 ];

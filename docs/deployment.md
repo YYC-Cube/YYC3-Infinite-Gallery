@@ -3,7 +3,7 @@ file: deployment.md
 title: 部署指南
 description: YYC³ Infinite Gallery 多环境部署、发布门禁、资产治理与安全响应头运维指南
 author: YYC³ Team <admin@0379.email>
-version: v1.1.0
+version: v1.2.0
 created: 2026-11-18
 updated: 2026-11-22
 status: stable
@@ -295,9 +295,31 @@ pnpm typecheck && pnpm lint && pnpm test:coverage \
 
 | 方案 | 适用 | 操作要点 |
 | ---- | ---- | ---- |
-| 对象存储 + CDN（推荐） | 新增音频/视频/大图 | 上传至 S3/R2/OSS，`public/` 只保留元数据与封面；`lib/media-store.ts` 中的 `src` 改为 CDN 绝对 URL 或环境变量前缀 `NEXT_PUBLIC_MEDIA_BASE_URL` |
+| 对象存储 + CDN（推荐，代码已就绪） | 新增音频/视频/大图 | 设置 `NEXT_PUBLIC_MEDIA_BASE_URL` 即完成代码侧切换（`lib/media-url.ts` 统一前缀）；运行 `pnpm assets:plan` 生成外迁清单与 rclone/AWS 命令 |
 | Git LFS | 必须留在仓库的少量大文件 | `git lfs install` → `git lfs track "public/mp3/**" "public/mv-*/**"` → 提交 `.gitattributes`；注意 GitHub Pages 仍需在构建时拉取 LFS 对象 |
 | 构建期外链 | 临时方案 | 构建前脚本从对象存储同步至 `public/`，产物不随仓库体积增长，但 CI 需配置访问凭证（仅存 Secrets） |
+
+#### 外迁操作流程（代码侧零改动）
+
+```bash
+# 1. 生成外迁清单（文件、体积、上传命令）
+pnpm assets:plan
+
+# 2. 上传 5 个媒体目录到对象存储（保持相对路径）
+#    参考 assets:plan 输出的 rclone / aws s3 命令
+
+# 3. 配置媒体基址并重建
+echo 'NEXT_PUBLIC_MEDIA_BASE_URL=https://media.yyc3.top' >> .env.local
+pnpm build
+
+# 4. 校验：构建产物中媒体地址已带前缀
+grep -o 'https://media.yyc3.top/mp3' out/_next/static/chunks/*.js | head -1
+
+# 5. 迁移完成后可从 public/ 移除已外迁文件，并运行预算门禁
+pnpm assets:check
+```
+
+> 说明：内置曲目每次由 `BUILTIN_TRACKS` 重新生成地址，且媒体空间恢复持久化队列时按 `id` 重取最新 `src/cover`，因此切换基址后旧 localStorage 中的历史路径会自动失效，无需用户清理缓存。
 
 迁移前必须：核对媒体内容授权（代码许可证不覆盖音频/视频内容）、更新 SW 预缓存范围（`scripts/generate-sw-assets.mjs`）、跑 `pnpm assets:check` 与 E2E。
 
@@ -308,6 +330,13 @@ pnpm typecheck && pnpm lint && pnpm test:coverage \
 ### 平台限制
 
 GitHub Pages 不支持自定义响应头，因此**响应头形式的 CSP/HSTS/X-Frame-Options 无法在源站设置**。`meta` 形式 CSP 在该站点需保留 `'unsafe-inline'`（Next 静态导出的内联脚本与样式），防护收益有限，不能替代响应头。
+
+### 仓库内置 `public/_headers`
+
+本仓库已内置 `public/_headers`（构建后位于 `out/_headers`），包含完整 CSP、HSTS、`X-Content-Type-Options`、`Referrer-Policy`、`X-Frame-Options`、`Permissions-Policy` 以及 `/_next/static/*` 长缓存、`sw.js` 与 HTML 不缓存规则。
+
+- 部署到 **Cloudflare Pages / Netlify** 等支持 `_headers` 的平台时**自动生效**，无需额外配置。
+- 部署到 **GitHub Pages** 时该文件被忽略（无副作用）；如需生效，按下方边缘层方案同域名注入同一套响应头。
 
 ### 推荐方案：边缘层注入响应头
 
@@ -362,6 +391,7 @@ Netlify 或 Cloudflare Pages 部署则使用仓库根 `_headers` 文件，内容
 
 | 版本 | 日期 | 变更内容 | 作者 |
 | ---- | ---- | -------- | ---- |
+| v1.2.0 | 2026-11-22 | 内置 `public/_headers`（CF Pages/Netlify 自动生效）；新增 `NEXT_PUBLIC_MEDIA_BASE_URL` 与 `pnpm assets:plan` 外迁零改动流程；补充缓存策略说明 | YYC³ Team |
 | v1.1.0 | 2026-11-22 | 增补 CI/CD 门禁与依赖顺序、发布回滚手册、静态资产治理（预算门禁与实测基线、CDN/LFS 迁移路径）、安全响应头与 CSP 边缘模板、监控与故障处置表 | YYC³ Team |
 | v1.0.0 | 2026-11-18 | 按 YYC³ 团队标规统一 front matter、品牌写法与标头标尾 | YYC³ Team |
 
