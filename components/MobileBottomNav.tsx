@@ -2,9 +2,9 @@
  * @file 移动端底部导航
  * @description 移动端安全区适配、底部导航栏与触摸手势增强
  * @author YYC³
- * @version 1.1.0
+ * @version 1.2.0
  * @created 2026-11-20
- * @updated 2026-11-20
+ * @updated 2026-11-26
  */
 "use client";
 
@@ -15,7 +15,7 @@ import {
   Settings,
   Smartphone,
 } from "lucide-react";
-import { setSpaceOpen } from "@/lib/media-space/store";
+import { setSpaceOpen, useMediaSpace } from "@/lib/media-space/store";
 import { useWidgets, setWidgetEnabled } from "@/lib/widget-store";
 import { t, useLocale } from "@/lib/i18n";
 
@@ -31,8 +31,14 @@ const TAB_ICONS: Record<MobileTab, React.ComponentType<{ size?: number | string 
   design: Settings,
 };
 
-export default function MobileBottomNav() {
+interface MobileBottomNavProps {
+  /** 设计面板等全屏浮层打开时隐藏导航，避免遮挡浮层底部内容 */
+  hidden?: boolean;
+}
+
+export default function MobileBottomNav({ hidden = false }: MobileBottomNavProps) {
   const widgets = useWidgets();
+  const space = useMediaSpace();
   const locale = useLocale();
   const [activeTab, setActiveTab] = useState<MobileTab>("gallery");
   const [isMobile, setIsMobile] = useState(false);
@@ -77,8 +83,15 @@ export default function MobileBottomNav() {
     [handleTabPress],
   );
 
+  // 高亮以媒体空间实际开关为准，避免出现「标签在画廊、画面是播放器」的错位
+  const selectedTab: MobileTab = space.isOpen
+    ? "media"
+    : activeTab === "widgets"
+      ? "widgets"
+      : "gallery";
+
   // 所有 hooks 调用完毕后才允许条件返回，保证 hooks 调用顺序稳定
-  if (!isMobile) return null;
+  if (!isMobile || hidden) return null;
 
   return (
     <nav
@@ -90,13 +103,13 @@ export default function MobileBottomNav() {
       }}
     >
       <div
-        className="flex h-10 w-full max-w-md items-center justify-center rounded-full border border-warm/20 bg-[#0a0908]/85 px-2 py-1.5 shadow-2xl backdrop-blur-xl"
+        className="flex h-12 w-full max-w-md items-center justify-center rounded-full border border-warm/20 bg-[#0a0908]/85 px-2 shadow-2xl backdrop-blur-xl"
         role="tablist"
         aria-label="标签页导航"
       >
         {MOBILE_TABS.map((tab) => {
           const Icon = TAB_ICONS[tab];
-          const isActive = activeTab === tab;
+          const isActive = selectedTab === tab;
           return (
             <button
               key={tab}
@@ -104,7 +117,7 @@ export default function MobileBottomNav() {
               role="tab"
               onClick={() => handleTabPress(tab)}
               onKeyDown={(e) => handleKeyDown(e, tab)}
-              className={`flex h-8 w-8 flex-col items-center justify-center gap-0.5 rounded-lg transition-all duration-200 ${
+              className={`flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-lg transition-all duration-200 ${
                 isActive
                   ? "bg-warm/20 text-warm-primary border border-warm/40"
                   : "text-white/40 hover:text-warm-primary hover:bg-white/5"
@@ -115,52 +128,13 @@ export default function MobileBottomNav() {
               title={t(`nav.${tab}`, locale)}
             >
               <Icon size={16} />
-              <span className="text-[9px] font-mono leading-none">
+              <span className="text-[12px] font-mono leading-none">
                 {t(`nav.${tab}`, locale)}
               </span>
             </button>
           );
         })}
       </div>
-
-      {/* 快捷操作提示（仅在非媒体/设计标签时显示） */}
-      {activeTab === "gallery" && (
-        <div
-          className="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-[10000] flex items-center gap-2 rounded-lg border border-warm/20 bg-[#0a0908]/90 px-3 py-2 shadow-2xl backdrop-blur-xl animate-fade-in-up"
-          role="region"
-          aria-label="快捷操作提示"
-        >
-          <span className="text-[10px] text-warm-primary/70">轻触切换空间</span>
-          <button
-            type="button"
-            onClick={() => {
-              setSpaceOpen(true);
-              setActiveTab("media");
-            }}
-            className="h-6 w-6 rounded-full border border-warm/30 bg-black/40 flex items-center justify-center text-[10px] text-warm-primary hover:bg-warm/20"
-            aria-label="打开媒体空间"
-          >
-            <Disc3 size={10} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const hasEnabled = widgets.order.some(
-                (id) => widgets.items[id]?.enabled,
-              );
-              if (!hasEnabled) {
-                // 启用时钟组件作为示例
-                void setWidgetEnabled("clock", true);
-              }
-              setActiveTab("widgets");
-            }}
-            className="h-6 w-6 rounded-full border border-warm/30 bg-black/40 flex items-center justify-center text-[10px] text-warm-primary hover:bg-warm/20"
-            aria-label="打开组件面板"
-          >
-            <Smartphone size={10} />
-          </button>
-        </div>
-      )}
     </nav>
   );
 }

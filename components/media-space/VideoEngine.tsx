@@ -271,7 +271,7 @@ const VideoEngine = forwardRef<VideoEngineHandle, VideoEngineProps>(
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 px-4 text-center">
             <div className="space-y-2">
               <p className="text-xs text-red-200">{error}</p>
-              <p className="text-[10px] text-white/40">
+              <p className="text-[12px] text-white/40">
                 可尝试切换其他视频或播放器形态
               </p>
               <button
@@ -286,7 +286,7 @@ const VideoEngine = forwardRef<VideoEngineHandle, VideoEngineProps>(
                     void video.play().catch(() => setSessionPlaying(sessionId, false));
                   }
                 }}
-                className="rounded-full border border-warm/30 bg-black/40 px-3 py-1 text-[10px] text-warm-primary transition-colors hover:bg-warm-primary/15"
+                className="rounded-full border border-warm/30 bg-black/40 px-3 py-1 text-[12px] text-warm-primary transition-colors hover:bg-warm-primary/15"
               >
                 重试加载
               </button>

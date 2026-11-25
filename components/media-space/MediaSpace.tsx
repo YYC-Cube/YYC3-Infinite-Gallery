@@ -91,6 +91,11 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
     };
   }, []);
 
+  // 状态已水合：移动端 CSS 依据该标记放行媒体空间绘制，避免首帧闪出播放器
+  useEffect(() => {
+    document.documentElement.dataset.mediaHydrated = "1";
+  }, []);
+
   useEffect(() => {
     const query = window.matchMedia("(max-width: 767px)");
     const sync = () => setCompact(query.matches);
@@ -254,7 +259,7 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
           />
         </span>
         {playingCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-warm-primary px-1 text-[9px] font-bold text-black">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-warm-primary px-1 text-[11px] font-bold text-black">
             {playingCount}
           </span>
         )}
@@ -277,7 +282,7 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
       {notice && (
         <div
           role="status"
-          className="pointer-events-none fixed left-1/2 top-16 z-[9100] -translate-x-1/2 rounded-full border border-warm/25 bg-[#0a0908]/90 px-3 py-1.5 text-[10px] text-white/70 shadow-xl backdrop-blur-xl"
+          className="pointer-events-none fixed left-1/2 top-16 z-[9100] -translate-x-1/2 rounded-full border border-warm/25 bg-[#0a0908]/90 px-3 py-1.5 text-[12px] text-white/70 shadow-xl backdrop-blur-xl"
         >
           {notice}
         </div>
@@ -292,7 +297,7 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
             <p className="truncate font-[family-name:var(--font-cormorant)] text-sm italic text-white/80">
               Autonomous Media Space
             </p>
-            <p className="hidden text-[8px] font-mono tracking-[0.18em] text-white/30 sm:block">
+            <p className="hidden text-[11px] font-mono tracking-[0.18em] text-white/30 sm:block">
               {playingCount > 0 ? `${playingCount} PLAYING · ` : ""}
               {audioSession ? "AUDIO" : ""}{" "}
               {videoCount > 0 ? `· ${videoCount} VIDEO` : ""}
@@ -311,7 +316,7 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
                 // 同步设计系统版本，避免两套布局状态分叉
                 setLayout(nextMode);
               }}
-              className="flex items-center gap-1.5 rounded-lg border border-warm/20 bg-black/25 px-2.5 py-1.5 text-[10px] text-white/55 transition-colors hover:border-warm/40 hover:text-warm-primary"
+              className="flex items-center gap-1.5 rounded-lg border border-warm/20 bg-black/25 px-2.5 py-1.5 text-[12px] text-white/55 transition-colors hover:border-warm/40 hover:text-warm-primary"
               title={
                 space.mode === "unified" ? "拆分为独立窗口" : "合并为统一界面"
               }
@@ -417,7 +422,7 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
                 className="flex items-center gap-1 rounded-xl border border-warm/15 bg-black/35 py-0.5 pl-2 pr-0.5"
               >
                 {miniIcon}
-                <span className="max-w-28 truncate text-[10px] text-white/60">
+                <span className="max-w-28 truncate text-[12px] text-white/60">
                   {mini.label}
                   {miniTrack?.title ? ` · ${miniTrack.title}` : ""}
                 </span>
@@ -446,7 +451,7 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
             <button
               type="button"
               onClick={restoreAllWindows}
-              className="flex items-center gap-1 rounded-xl border border-warm/20 bg-black/25 px-2 py-1 text-[9px] text-white/50 transition-colors hover:border-warm/40 hover:text-warm-primary"
+              className="flex items-center gap-1 rounded-xl border border-warm/20 bg-black/25 px-2 py-1 text-[12px] text-white/50 transition-colors hover:border-warm/40 hover:text-warm-primary"
               title="还原全部最小化容器"
             >
               <Undo2 size={11} />
@@ -458,7 +463,7 @@ export default function MediaSpace({ config }: MediaSpaceProps) {
 
       {effectiveMode === "split" && (
         <div className="pointer-events-none fixed bottom-[calc(132px+env(safe-area-inset-bottom))] left-1/2 z-[9001] -translate-x-1/2">
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-warm/20 bg-[#0a0908]/80 px-3 py-1.5 text-[9px] text-white/35 shadow-xl backdrop-blur-xl">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-warm/20 bg-[#0a0908]/80 px-3 py-1.5 text-[12px] text-white/35 shadow-xl backdrop-blur-xl">
             <Music2 size={10} />
             <span>拖动标题栏移动</span>
             <span className="text-white/15">|</span>

@@ -27,6 +27,7 @@ import {
 } from "@/lib/annotation-store";
 import type { GalleryConfig } from "@/lib/config-store";
 import { GALLERY_IMAGES } from "@/lib/media-store";
+import { useMediaSpace } from "@/lib/media-space/store";
 import {
   getRecommendationSnapshot,
   recordExposure,
@@ -47,6 +48,7 @@ export default function Home() {
   const [focusAnnotation, setFocusAnnotation] =
     useState<ImageAnnotation | null>(null);
   const locale = useLocale();
+  const mediaSpace = useMediaSpace();
   const focusRef = useRef<{ src: string; since: number } | null>(null);
 
   // Logo 链接：仅允许 http(s) 与站内路径，避免 javascript: 等危险协议
@@ -154,7 +156,7 @@ export default function Home() {
       <PWAProvider />
       <PerformanceMonitor />
       <XREntry />
-      <MobileBottomNav />
+      <MobileBottomNav hidden={isPanelOpen} />
       {/* 自定义背景层 */}
       {config.backgroundImage && (
         <div
@@ -180,12 +182,12 @@ export default function Home() {
         className="h-screen w-full rounded-lg overflow-hidden relative z-10"
       />
 
-      {/* AI 内容标注：当前焦点作品标签 */}
-      {focusAnnotation && (
+      {/* AI 内容标注：当前焦点作品标签（媒体空间或设置面板打开时隐藏，避免遮挡窗口标题） */}
+      {focusAnnotation && !mediaSpace.isOpen && !isPanelOpen && (
         <div className="fixed left-5 top-6 z-[9997] max-w-[220px] rounded-xl border border-warm/20 bg-[#0a0908]/75 px-3 py-2 shadow-xl backdrop-blur-xl sm:left-6">
           <div className="mb-1 flex items-center gap-1.5">
             <Sparkles size={11} className="text-warm-primary" />
-            <span className="text-[9px] font-mono tracking-widest text-warm-primary/70">
+            <span className="text-[12px] font-mono tracking-widest text-warm-primary/70">
               AI TAGS · {focusAnnotation.source === "local" ? "LOCAL" : "AI"}
             </span>
           </div>
@@ -193,7 +195,7 @@ export default function Home() {
             {focusAnnotation.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full border border-warm/20 bg-warm/10 px-2 py-0.5 text-[9px] text-white/70"
+                className="rounded-full border border-warm/20 bg-warm/10 px-2 py-0.5 text-[12px] text-white/70"
               >
                 {tag}
               </span>
@@ -374,7 +376,7 @@ export default function Home() {
                   d="M19 14l-7 7m0 0l-7-7m7 7V3"
                 />
               </svg>
-              <span className="text-[10px] tracking-widest uppercase font-mono">
+              <span className="text-[12px] tracking-widest uppercase font-mono">
                 {t("hint.scroll", locale)}
               </span>
             </div>
@@ -385,11 +387,14 @@ export default function Home() {
       {/* ========================================
 			    配置面板触发按钮 (悬浮)
 			   ======================================== */}
+      {/* 移动端媒体空间打开时隐藏悬浮设置按钮，避免遮挡其右上角窗口控制；桌面保留入口 */}
       <button
         onClick={() => setIsPanelOpen(true)}
-        className="
-					fixed bottom-24 right-6 z-[9997]
+        className={`
+					fixed right-5 top-[calc(env(safe-area-inset-top,0px)+20px)] z-[9997]
 					h-11 rounded-full px-3.5
+					md:bottom-24 md:right-6 md:top-auto
+					${mediaSpace.isOpen ? "max-md:hidden" : ""}
 					glass-effect
 					flex items-center gap-1.5
 					text-white/70 hover:text-white
@@ -397,7 +402,7 @@ export default function Home() {
 					hover:scale-105 hover:shadow-lg
 					group
 					animate-pulse-glow
-				"
+				`}
         aria-label="打开设置"
         title="设置 · 主题与页面配置"
       >
@@ -405,7 +410,7 @@ export default function Home() {
           size={16}
           className="transition-transform duration-500 group-hover:rotate-90"
         />
-        <span className="text-[10px] font-mono tracking-widest">设置</span>
+        <span className="text-[12px] font-mono tracking-widest">设置</span>
       </button>
 
       {/* 可启用、拖拽、缩放和迷你化的页面组件 */}

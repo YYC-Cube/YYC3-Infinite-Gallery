@@ -143,7 +143,12 @@ function restoreFromStorage(): MediaSpaceState {
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState();
+    if (!raw) {
+      const base = defaultState();
+      // 移动端首次进入默认收起媒体空间，避免覆盖 3D 画廊首屏
+      if (window.innerWidth < 768) base.isOpen = false;
+      return base;
+    }
     const parsed = JSON.parse(raw) as Partial<MediaSpaceState>;
     const base = defaultState();
     if (!parsed.sessions || typeof parsed.sessions !== "object") return base;

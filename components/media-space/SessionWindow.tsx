@@ -425,15 +425,15 @@ export default function SessionWindow({
             style={{ animationDuration: "6s" }}
           />
         )}
-        <span className="min-w-0 flex-1 truncate font-mono text-[10px] tracking-[0.18em] text-white/60">
-          {isMaximized ? `${session.label} · ${activeTrack?.title ?? ""}` : session.label}
+          <span className="min-w-0 flex-1 truncate font-mono text-[12px] tracking-[0.18em] text-white/60">
+            {isMaximized ? `${session.label} · ${activeTrack?.title ?? ""}` : session.label}
         </span>
         {isVideo && (
-          <span className="rounded-full border border-warm/20 px-1.5 py-0.5 text-[8px] text-white/35">
+          <span className="rounded-full border border-warm/20 px-1.5 py-0.5 text-[12px] text-white/35">
             {session.orientation === "portrait" ? "竖屏" : "横屏"}
           </span>
         )}
-        <span className="hidden text-[8px] text-white/25 sm:inline">
+        <span className="hidden text-[11px] text-white/25 sm:inline">
           {isVideo ? "ArtPlayer" : "Hi-Fi"}
         </span>
         <button
@@ -501,7 +501,7 @@ export default function SessionWindow({
             )}
             {(gesture.isLongPressing || gesture.pinchScale !== 1) && (
               <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-                <span className="rounded-full border border-warm/30 bg-black/60 px-3 py-1.5 text-[10px] font-mono text-warm-primary">
+                <span className="rounded-full border border-warm/30 bg-black/60 px-3 py-1.5 text-[12px] font-mono text-warm-primary">
                   {gesture.isLongPressing
                     ? "松开收藏"
                     : `音量 ${Math.round(session.volume * 100)}%`}
@@ -570,7 +570,7 @@ export default function SessionWindow({
               <p className="max-w-[260px] truncate text-sm text-white/90">
                 {activeTrack?.title ?? "暂无音乐"}
               </p>
-              <p className="mt-0.5 max-w-[260px] truncate text-[9px] font-mono tracking-wider text-white/35">
+              <p className="mt-0.5 max-w-[260px] truncate text-[12px] font-mono tracking-wider text-white/35">
                 {activeTrack?.artist} · {activeTrack?.album}
               </p>
             </div>
@@ -584,7 +584,7 @@ export default function SessionWindow({
             )}
             {(gesture.isLongPressing || gesture.pinchScale !== 1) && (
               <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-                <span className="rounded-full border border-warm/30 bg-black/60 px-3 py-1.5 text-[10px] font-mono text-warm-primary">
+                <span className="rounded-full border border-warm/30 bg-black/60 px-3 py-1.5 text-[12px] font-mono text-warm-primary">
                   {gesture.isLongPressing
                     ? "松开收藏"
                     : `音量 ${Math.round(session.volume * 100)}%`}
@@ -595,7 +595,7 @@ export default function SessionWindow({
         )}
 
         {gestureTip && (
-          <div className="pointer-events-none absolute left-1/2 top-12 z-30 -translate-x-1/2 rounded-full border border-warm/25 bg-[#0a0908]/85 px-3 py-1 text-[10px] font-mono text-warm-primary shadow-xl backdrop-blur-xl">
+          <div className="pointer-events-none absolute left-1/2 top-12 z-30 -translate-x-1/2 rounded-full border border-warm/25 bg-[#0a0908]/85 px-3 py-1 text-[12px] font-mono text-warm-primary shadow-xl backdrop-blur-xl">
             {gestureTip}
           </div>
         )}
@@ -611,7 +611,7 @@ export default function SessionWindow({
             className="media-slider w-full"
             aria-label={`${session.label}播放进度`}
           />
-          <div className="flex items-center justify-between font-mono text-[9px] text-white/30">
+          <div className="flex items-center justify-between font-mono text-[12px] text-white/30">
             <span>{formatTime(session.currentTime)}</span>
             <span>{formatTime(session.duration)}</span>
           </div>
@@ -678,7 +678,7 @@ export default function SessionWindow({
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="ml-auto flex items-center gap-1 rounded-full border border-warm/25 bg-black/30 px-2 py-1 text-[9px] text-white/55 transition-colors hover:border-warm/50 hover:text-warm-primary disabled:opacity-50"
+            className="ml-auto flex items-center gap-1 rounded-full border border-warm/25 bg-black/30 px-2 py-1 text-[12px] text-white/55 transition-colors hover:border-warm/50 hover:text-warm-primary disabled:opacity-50"
             aria-label={`上传本地${isVideo ? "视频" : "音频"}`}
             title={`上传本地${isVideo ? "视频" : "音频"}（单个 ≤200MB）`}
           >
@@ -760,11 +760,11 @@ export default function SessionWindow({
                     <Music2 size={10} />
                   )}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[10px]">
+                <span className="min-w-0 flex-1 truncate text-[12px]">
                   {item.title}
                 </span>
                 {item.isLocal && (
-                  <span className="text-[8px] text-white/25">本地</span>
+                  <span className="text-[11px] text-white/25">本地</span>
                 )}
               </button>
             ))}
@@ -794,7 +794,7 @@ export default function SessionWindow({
         className="hidden"
         onChange={handleUpload}
       />
-      <span className="pointer-events-none absolute bottom-3 right-10 z-10 hidden items-center gap-1 text-[8px] font-mono text-white/20 sm:flex">
+      <span className="pointer-events-none absolute bottom-3 right-10 z-10 hidden items-center gap-1 text-[11px] font-mono text-white/20 sm:flex">
         <ListMusic size={9} /> {session.queue.length}
       </span>
     </section>
