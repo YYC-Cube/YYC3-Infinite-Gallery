@@ -42,6 +42,7 @@ next-env.d.ts
 # 文档：自有标规/设计/评估文档入库（约 588K，保证可追溯与 CI 文档门禁有效）
 # 仅排除第三方源码快照与调研组件库（体积大且许可证独立，按需本地保留）
 /docs/YYC3-MusAI-开源组件库/
+/docs/NAS-F4-423-服务落地/
 /docs/**/*.zip
 # Trae 本地分享包缓存
 .trae-html-share-packages/
